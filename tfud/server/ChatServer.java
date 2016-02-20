@@ -97,25 +97,20 @@ public class ChatServer extends Server {
         long diff = (now.getTime() - startup.getTime());
         long seconds = (diff / 1000);
 
-        int days = (int) (seconds / 86400);	// antal hele dage
-        int days_r = (int) (seconds % 86400);	// sekunder til rest
+        int days = (int) (seconds / 86400);                                     // antal hele dage
+        int days_r = (int) (seconds % 86400);                                   // sekunder til rest
 
-        int hours = days_r / 3600;			// heltals division	giver timer 
-        int r_secs = days_r % 3600;			// sekunder til rest
+        int hours = days_r / 3600;                                              // heltals division	giver timer 
+        int r_secs = days_r % 3600;                                             // sekunder til rest
 
-        int mins = r_secs / 60;				// heltals division giver minutter af sekunder til rest
-        int secs = r_secs % 60;				// sekunder til rest 	
+        int mins = r_secs / 60;                                                 // heltals division giver minutter af sekunder til rest
+        int secs = r_secs % 60;                                                 // sekunder til rest 	
 
         String mydays = days + "";
         String myhours = hours + "";
         String mymins = mins + "";
         String mysecs = secs + "";
 
-        /*if(secs < 10)
-    		mysecs = "0" + secs;	    	
-    	if(mins < 10)	
-    		mymins = "0" + mins;	    		
-         */
         return "Uptime: " + mydays + " days " + myhours + " hrs " + mymins + " mins " + mysecs + " secs ";
     }
 
@@ -149,7 +144,7 @@ public class ChatServer extends Server {
             tfud.communication.DataPackage temp;
 
             logger.log(commandstring);
-            String[] args = commandstring.split(" ");	// args[0] == Command
+            String[] args = commandstring.split(" ");                           // args[0] == Command
             String command = args[0];
 
             logger.log(source.myaccesslevel);
@@ -188,7 +183,7 @@ public class ChatServer extends Server {
                 facade.log(temp, source.getHostAddress());
 
                 return true;
-            } else if (source.getAccessLevel() == 0) { // only root
+            } else if (source.getAccessLevel() == 0) {                          // only root
 
                 String response = "";
                 if (command.equals("//uptime")) {
@@ -295,12 +290,8 @@ public class ChatServer extends Server {
 
         } catch (IOException ie) {
             logger.log("IOException in Server .. " + ie.getMessage());
-            // DEBUG
-            ie.printStackTrace();
         } catch (Exception e) {
             logger.log("Exception in Server .. " + e.getMessage());
-            // DEBUG
-            e.printStackTrace();
         }
 
     }
