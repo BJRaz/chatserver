@@ -1,0 +1,619 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+    <head>
+        <title>Chatapp - development version!</title>
+        <style type="text/css">
+            BODY {
+                background-color:white;
+                background-image:url("pics/chessboard_l.jpg");
+                background-position:center center;
+                background-repeat:no-repeat;
+                background-color:rgb(202,207,248);
+                color:white;
+                font-family:Arial;
+                margin:5px;
+            }
+
+            BUTTON {
+                font-family:Arial;
+                font-size:1.2em;
+                color:white;
+            }
+
+
+            .useravatar {
+                /* width */
+                height:30px;
+            }
+
+            .userImage IMG {
+                width:20px;
+                height:30px;
+            }
+
+            .messageTableView {
+
+
+            }
+
+            .messageTableView TD {
+                font-family:Arial;
+                font-size:0.8em;				
+            }
+
+            .handle {
+
+                width:45px;
+                /*background-image:url("pics/chessboard_small.jpg");	*/
+            }
+
+            .handletable {
+                border:1px solid black;
+            }
+
+            .userTable {
+                font-size:1.2em;
+                font-family:Arial;	
+            }
+
+            #messages {
+                overflow:auto;
+                height:460px;	
+
+            }
+
+            #message {
+                width:400px;
+                height:20px;	
+            }
+
+            #messageBox_1 {
+                color:black;
+                font-weight:bold;
+            }
+
+            #userview {
+                overflow:auto;
+
+                height:300px;
+            }
+
+            #send {
+                height:20px;	
+                border:none;
+            }
+
+            #send BUTTON {
+                font-size:10px;
+            }
+
+            #floatingpawn {
+                position:absolute;
+                left:840px;	
+                top:200px;
+            }
+
+            .loginframe {
+                position:absolute;
+                left:200px;
+                top:200px;	
+                border:1px solid black;		
+                background-color:white;	
+
+            }
+
+            .loginframe TD {			
+                color:black;
+                font-size:1.0em;	
+            }
+
+            .loginframe_hidden {
+                display:none;
+            }
+
+            .publicMsg SPAN {
+                /* background-color:white;*/
+                color:black;
+            }
+
+            .privateMsg SPAN {
+                background-color:white;
+                color:red;	
+            }
+
+            .simpleMessagesView TD {
+                border-bottom:1px solid black;
+                padding:2px 5px 2px 5px;	
+            }
+        </style>
+        <style id="cliparts" type="text/css">
+            .cornerimage {
+                width:20px;
+                height:20px;
+                background-repeat:no-repeat;			
+            }
+
+            .left_blue {
+                background-image:url('pics/left_top_blue.gif');
+                background-position:bottom;
+            }
+
+            .left_lower_blue {
+                background-image:url('pics/left_lower_blue.gif');	
+            }
+
+            .right_blue {
+                background-image:url('pics/right_top_blue.gif');	
+                background-position:bottom;
+            }
+
+            .right_lower_blue {
+                background-image:url('pics/right_lower_blue.gif');	
+            }
+
+            .left_side {
+                border-left:1px solid black;
+            } 
+
+            .top_side {
+                border-top:1px solid black;			
+            }
+
+            .right_side {
+                border-right:1px solid black;
+            }
+
+            .lower_side {
+                border-bottom:1px solid black;
+            }
+
+            .blue {
+                background-color:rgb(179,186,236);
+            }
+
+
+            .top_lower {
+                border-bottom:1px solid black;
+                border-top:1px solid black;
+            }
+
+
+            .box{
+                border-bottom:1px solid black;
+                border-right:1px solid black;
+                border-left:1px solid black;
+                border-top:1px solid black;
+            }
+
+            .fun {
+                position:absolute;
+                top:-564px;
+                left:100px;	
+            }
+        </style>
+        <script type="text/javascript" src="js/observables.js"></script>
+        <script type="text/javascript" src="js/lists.js"></script>
+        <script type="text/javascript" src="js/chatclient.js"></script>
+        <script type="text/javascript">
+
+            var user_id = 0;
+
+            function ChatEventListener() {
+                this.eventReceived = function (evt) {
+                    //document.getElementById("messageBox_1").innerHTML += ("<br>" + evt["type"] + " " + evt["obj"].name + " " + evt["obj"].id);	
+                    //window.user_id = evt["obj"].id;				
+                }
+            }
+
+
+            document.listeners = new Array();
+
+            document.addListeners = function (obj) {
+                document.listeners.push(obj);
+            }
+
+            document.fireOnlineEvent = function (evt) {
+                for (var i = 0; i < document.listeners.length; i++) {
+                    document.listeners[i].eventReceived(evt)
+                }
+            }
+
+            var images = ["left_top.gif", "left_lower.gif", "right_top.gif", "right_lower.gif"];
+
+            for (i in images) {
+                new Image().src = "pics/" + images[i].toString();
+            }
+
+            var messageBox1 = null;
+
+            var messagemodel = null;
+            var messageview = null;
+            var usermodel = null;
+            var userview = null;
+            var loginframe = null;
+            var chatApp = null;			// the applet
+
+            var id = 0;
+            var fun_elem;
+
+            window.onresize = function () {
+                //window.status = window.event.clientY + " " + window.event.clientX;	
+            }
+
+            function init() {
+
+                document.addListeners(new ChatEventListener());
+
+                messagemodel = new List();
+                messageview = new MessageViewSimple(messagemodel, document.getElementById("messages"));
+
+                usermodel = new UserList();
+                userview = new UserView(usermodel, document.getElementById("userview"));
+
+                // Assign applet to variable
+                chatApp = document.getElementById("chatApp")
+
+                initButtons();
+                isPrivate = 0;
+
+                loginframe = document.getElementById("loginframe");
+
+                messageBox = document.getElementById("messageBox");
+                messageBox1 = document.getElementById("messageBox_1");
+
+                message = document.getElementById("message");
+
+                message.onkeypress = keyCheck;
+
+                /*
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 messagemodel.add(new Message(1, "Hria", "HEJ"));
+                 
+                 for(var i=0;i<20;i++)
+                 usermodel.add(new User(1, "BRIAN"));
+                 */
+
+                // TEST
+                fun_elem = document.getElementById("fun");
+
+            }
+
+
+
+
+            function addMessage(btn) {
+                btn.blur();
+                var textElm = document.getElementById("messageText");
+                messagemodel.add(new Message(id++, "Brian", textElm.value));
+                textElm.value = "";
+            }
+
+            function showLoginFrame() {
+                loginframe.className = "loginframe";
+            }
+
+            function hideLoginFrame() {
+                loginframe.className = "loginframe_hidden";
+            }
+
+
+        </script>	
+        <script type="text/javascript" id="initstuff">
+            <!--
+                function initButtons() {
+                btnSend = document.getElementById("send");
+                btnSend.onclick = OnSend;
+
+                btnConnect = document.getElementById("connect");
+                btnConnect.onclick = showLoginFrame;
+
+                btnDisconnect = document.getElementById("disconnect");
+                btnDisconnect.onclick = OnDisconnect;
+
+                /*btnSendAll = document.getElementById("sendAll");
+                 btnSendAll.disabled = true; 
+                 */
+            }
+            //-->	
+        </script>
+        <script type="text/javascript" id="funstuff">
+
+            /**
+             *	TEst 
+             */
+
+            var t = 0;
+            var users = ["brian", "Anders", "Jens", "Hans", "Helga", "Troels", "masd", "Jsjia", "jisjdccce", "jijisjdijsd", "MMMM"];
+            var ids = [0, 1, 2, 3, 4, 5];
+
+            var finished = true;
+
+            function test() {
+                //document.getElementById("message").value = "Tekst :)" + t++;
+                var rand = Math.round(Math.random() * 10);
+                var u = new Message(rand, users[rand], "HEJ - :D:D:D:D :!!!");
+
+                //if(!messagemodel.find(u))
+                if (t < 40) {
+                    messagemodel.add(u);
+                    messageBox1.innerHTML = t++;
+                    if (btnSend.fireEvent)
+                        btnSend.fireEvent("onclick");
+                } else {
+                    messagemodel.clear();
+                    //finished = true;
+                    //messageBox1.innerHTML = t;
+                    t = 0;
+
+                }
+
+                if (!finished)
+                    setTimeout(test, 10);
+            }
+
+
+            function test2() {
+                message.value = "Test: :D :) " + (t++);
+                //if(btnSend.fireEvent)
+                btnSend.click();
+                //else if(btnSend.dispatchEvent)
+                //	btnSend.dispatchEvent("click");
+                if (!finished)
+                    setTimeout(test2, 500);
+            }
+
+
+            function endTest() {
+                finished = true;
+            }
+
+            function fun_run() {
+                fun_elem.style.display = "";
+                fun();
+            }
+
+            function addUsers() {
+                var textElm = document.getElementById("message");
+                textElm.value = id++;
+                btnSend.fireEvent("onclick");
+                if (id < 1000)
+                    setTimeout(addUsers, 500);
+
+            }
+
+            function fun_end() {
+                fun_elem.style.display = "none";
+                fun_elem.style.left = "800px";
+            }
+
+            function fun() {
+
+                var x = parseInt(fun_elem.style.left);
+                x -= 5;
+                fun_elem.style.left = x;
+                if (x > 200)
+                    setTimeout(fun, 50);
+                else
+                    (fun_end());
+
+            }
+            //-->
+        </script>
+    </head>
+    <body onload="init();">
+        <noscript>Sorry - din browser underst&oslash;tter ikke Javascript, og kan der ikke fungere!</noscript>
+        <div id="fun" style="position:absolute;top:100px;left:800px;display:none;"><img src="pics/Cave_man.gif"></div>
+        <div id="loginframe" class="loginframe_hidden">
+            <table>
+                <tr>
+                    <td align="right" onclick="hideLoginFrame();"> [x] </td>
+                </tr>
+                <tr>
+                    <td>
+                        <center>
+                            <form style="display:inline;">
+                                <table border="0">
+                                    <tr><td>Brugernavn:</td><td><input type="text" name="username" id="username" value="brian" /></td></tr>
+                                    <tr><td>Kodeord:</td><td><input type="password" name="password" id="password" value="brian1234" /></td></tr>
+                                    <tr><td colspan="2" align="right"><input type="button" name="submit" id="login" value="Login" onclick="OnConnect();hideLoginFrame();"/>&nbsp;<input type="reset" name="reset" id="reset" value="Nulstil" /></td></tr>
+                                </table>
+                            </form>
+                        </center>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+                <td valign="top">
+                    <table border='0' cellpadding="0" cellspacing="0">					
+                        <tr>
+                            <td class="cornerimage left_blue">&nbsp;</td>
+                            <td class="top_side blue" style="width:510px" width="100%">&nbsp;</td>
+                            <td class="cornerimage right_blue">&nbsp;</td>
+
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="box"><div id="messages"></div></td>
+                        </tr>
+                        <tr>
+                            <td class="cornerimage left_lower_blue">&nbsp;</td>
+                            <td class="lower_side blue" >&nbsp;</td>
+                            <td class="cornerimage right_lower_blue">&nbsp;</td>
+                        </tr>
+                    </table>
+
+                </td>
+                <td width="190" valign="top" rowspan="2">
+                    <table border=0>
+                        <tr>
+                            <td>
+                                <table border='0' cellpadding="0" cellspacing="0">								
+                                    <tr>
+                                        <td class="cornerimage left_blue"></td>
+                                        <td class="top_side blue" style="width:140px;">&nbsp;</td>
+                                        <td class="cornerimage right_blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="3" class="box"><div id="userview"></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="cornerimage left_lower_blue">&nbsp;</td>
+                                        <td class="lower_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_lower_blue">&nbsp;</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <table border='0' cellpadding="0" cellspacing="0">					
+                                    <tr>
+                                        <td class="cornerimage left_blue"></td>
+                                        <td class="top_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="left_side blue">&nbsp;</td>
+                                        <td class="blue" align='left' id="messageBox" style="width:140px;"></div></td>
+                                        <td class="right_side blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="cornerimage left_lower_blue">&nbsp;</td>
+                                        <td class="lower_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_lower_blue">&nbsp;</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr><td><span id="messageBox_1">Du skriver til Alle</span></td></tr>
+                        <TR>
+                            <TD colspan="2">
+                                <table border='0' cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td class="cornerimage left_blue"></td>
+                                        <td class="top_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="left_side blue">&nbsp;</td>
+                                        <td class="blue" align='left'><INPUT id="all" type="button" value="Skriv til alle" name="all" onclick="unSetPrivate();"></td>
+                                        <td class="right_side blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="cornerimage left_lower_blue">&nbsp;</td>
+                                        <td class="lower_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_lower_blue">&nbsp;</td>
+                                    </tr>
+                                </table>
+                            </TD>
+                        </tr>
+                        <tr>
+                            <TD>
+                                <table border='0' cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td class="cornerimage left_blue"></td>
+                                        <td class="top_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="left_side blue">&nbsp;</td>
+                                        <td class="blue" align='left'><INPUT id="connect" type="button" value="Log p�" name="connect"><INPUT id="disconnect" disabled type="button" value="Log af" name="disconnect"></td>
+                                        <td class="right_side blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="cornerimage left_lower_blue">&nbsp;</td>
+                                        <td class="lower_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_lower_blue">&nbsp;</td>
+                                    </tr>
+                                </table>
+                            </TD>
+                            <td>
+
+                            </td>
+                        </TR>
+                    </table>				
+                </td>
+            </tr>
+            <tr>
+
+                <td>
+                    <table>
+                        <tr>
+                            <td valign="top">
+                                <table border='0' cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td class="cornerimage left_blue"></td>
+                                        <td class="top_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="left_side blue">&nbsp;</td>
+                                        <td class="blue" align='left'><input type="text" id="message" disabled="true" /></td>
+                                        <td class="right_side blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="cornerimage left_lower_blue">&nbsp;</td>
+                                        <td class="lower_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_lower_blue">&nbsp;</td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td valign="top">
+                                <table border='0' cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td class="cornerimage left_blue"></td>
+                                        <td class="top_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="left_side blue">&nbsp;</td>
+                                        <td class="blue" align='left'><button class="blue" id="send" accesskey="s" name="send"><u>S</u>end</button></td>
+                                        <td class="right_side blue">&nbsp;</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="cornerimage left_lower_blue">&nbsp;</td>
+                                        <td class="lower_side blue">&nbsp;</td>
+                                        <td class="cornerimage right_lower_blue">&nbsp;</td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td><!--style="position:absolute;top:0px;";-->
+                                <APPLET 	
+
+                                    name="chatApp"
+                                    id="chatApp" 
+                                    height="0" 
+                                    width="0" 
+                                    code="tfud.client.ChatClientApplet.class" 
+                                    archive="chatclient.jar"
+                                    VIEWASTEXT 
+                                    MAYSCRIPT>
+                                    <PARAM NAME="serverhostname" VALUE="localhost" />
+                                    <PARAM NAME="username" VALUE="brian"	/>
+                                    <PARAM NAME="password" VALUE="brian1234" />
+                                </APPLET>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+
+            </tr>
+        </table>
+        <!---->
+    </body>
+</html>

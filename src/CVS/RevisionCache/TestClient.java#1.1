@@ -1,0 +1,23 @@
+package tfud.client;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import tfud.events.*;
+
+public class TestClient  {
+	private	tfud.client.ChatClientFrame client;
+	
+	public TestClient() {
+		ChatClient t = new ChatClient();
+		
+		client = new tfud.client.ChatClientFrame(t);
+		
+	}
+	
+	public static void main(String[] args) {
+		TestClient tc = new TestClient();	
+	}
+	
+	
+}

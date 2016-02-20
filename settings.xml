@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE settings [
+	<!ELEMENT settings (database)>	
+	<!ELEMENT database (type, hostname, databasename, username, password)>	
+	<!ELEMENT type (#PCDATA)>			
+	<!ELEMENT hostname (#PCDATA)>	
+	<!ELEMENT databasename (#PCDATA)>	
+	<!ELEMENT username (#PCDATA)>	
+	<!ELEMENT password (#PCDATA)>
+	<!ATTLIST hostname port CDATA "0">	
+]>
+<!-- 
+        database/type values can be: 
+                0 (postgresql)
+                1 (MySQL)
+                2 (ODBC) 
+-->
+<settings>
+    <database>
+        <type>0</type>
+        <hostname port="5432">localhost</hostname>
+        <databasename>chatserver</databasename>
+        <username>brian</username>
+        <password>brian</password>
+    </database>
+</settings>

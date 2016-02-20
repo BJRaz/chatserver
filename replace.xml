@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE replacements [
+	<!ELEMENT replacements (replace+)>	
+	<!ELEMENT replace (regexp, replacestr)>	
+	<!ELEMENT regexp (#PCDATA)>
+	<!ELEMENT replacestr (#PCDATA)>		
+]>
+<replacements>
+    <replace>
+        <regexp><![CDATA[>:-\(|>:\(]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_mad.gif" />]]></replacestr>
+    </replace>
+    <replace>
+        <regexp><![CDATA[:-\)|:\)]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_smile.gif" />]]></replacestr>
+    </replace>	
+    <replace>
+        <regexp><![CDATA[:-\(|:\(]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_sad.gif" />]]></replacestr>
+    </replace>
+    <replace>
+        <regexp><![CDATA[(;-\)|;\))]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_wink.gif" />]]></replacestr>
+    </replace>
+    <replace>
+        <regexp><![CDATA[(:-o|:o|:O|:-O)]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_surprised.gif" />]]></replacestr>
+    </replace>
+    <replace>
+        <regexp><![CDATA[(:-\||:\|)]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_neutral.gif" />]]></replacestr>
+    </replace>
+    <replace>
+        <regexp><![CDATA[(8-\||8\|)]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/icon_eek.gif" />]]></replacestr>
+    </replace>
+    <replace>
+        <regexp><![CDATA[!]]></regexp>
+        <replacestr><![CDATA[&nbsp;<img src="pics/smiles/exclamation.gif" />]]></replacestr>
+    </replace>
+
+</replacements>

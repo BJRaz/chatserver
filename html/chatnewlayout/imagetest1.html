@@ -1,0 +1,43 @@
+<html>
+    <head>
+
+        <script type="text/javascript">
+            var images = new Array();
+            ;
+            var imgspan;
+
+            function init() {
+                imgspan = document.getElementById("imagecontainer");
+                createImage("bonde11.gif");
+
+            }
+
+            function imageLoaded(image) {
+                imgspan.appendChild(image);
+            }
+
+            function imageLoadError(image) {
+                //var evt = (e != null) ? e : window.event;
+                image.src = "pics/bonde1.gif";
+            }
+
+            function createImage(filename) {
+                var img = document.createElement("IMG");
+                img.onload = function () {
+                    imageLoaded(img);
+                }
+                img.onerror = function () {
+                    imageLoadError(img);
+                }
+                img.src = "pics/" + filename;
+                images.push(img);
+
+            }
+        </script>
+
+    </head>
+    <body onload="init();">
+        <span id="imagecontainer"></span>
+        <button onclick="createImage('brian.jpg')">Set brian</button>
+    </body>
+</html>
