@@ -5,8 +5,6 @@
  */
 package tfud.pstorage;
 
-import tfud.communication.DataPackage;
-
 /**
  *
  * @author brian

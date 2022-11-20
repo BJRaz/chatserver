@@ -6,6 +6,7 @@ import tfud.parsers.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import tfud.utils.ILogger;
 
 /**
  * class ChatServerThread
@@ -32,12 +33,16 @@ public class ChatServerThread extends ServerThread {
     protected int myaccesslevel;							// accesslevel can be 0=root, 1=super, 2=normal
     protected Vector outBuffer; 							// outputdata buffer - Vector
     protected ChatServer server;    						// reference to server instance
+    private final ILogger logger;
 
+    
+    
     /**
      * Constructor
      *
      * @param	server	reference to server instance
      * @param	socket	socket to which this thread binds to
+     * @throws java.net.SocketException
      */
     public ChatServerThread(Server server, Socket socket) throws SocketException, IOException {
 
@@ -45,7 +50,7 @@ public class ChatServerThread extends ServerThread {
 
         this.server = (ChatServer) server;   			// REFERENCE TO MAIN SERVER 
         this.id = this.server.getNextID();			// set this threads ID
-
+        this.logger = this.server.logger; 
         this.outBuffer = new Vector(MINBUFFERSIZE); 		// initial size    
 
         myaccesslevel = 2;					// default accesslevel
@@ -155,7 +160,7 @@ public class ChatServerThread extends ServerThread {
 
         try {
 
-            System.out.println(" ** Connection from: " + hostaddress);
+            logger.log(" ** Connection from: " + hostaddress);
 
             Object res = null;
             DataPackage data;								// DataPackage reference
@@ -184,7 +189,7 @@ public class ChatServerThread extends ServerThread {
                 String username = ret[0].toString();
                 String password = ret[1].toString();
                 /* Check DB for USER */
-                System.out.println("User " + username + " is logging in.. ");
+                logger.log("User " + username + " is logging in.. ");
 
                 // violation of "dont talk to strangers"-pattern
                 returnValue = server.facade.checkLogin(username, password);
@@ -197,8 +202,9 @@ public class ChatServerThread extends ServerThread {
                     banned = true;
                     throw new Exception("User (" + username + "/" + password + ") is banned..");
                 }
-            } catch (Exception e) {
-                throw new IOException(e.getMessage());
+            }                       
+            catch (Exception e) {
+                throw e;
             }
 
             this.id = returnValue;
@@ -233,7 +239,7 @@ public class ChatServerThread extends ServerThread {
                 textData = "";
 
                 /* THIS IS DEPRECATED - TOO MUCH MEMORY WASTED FOR INSTANTIATING OBJECT */
- /*data = new DataPackage();
+                /*data = new DataPackage();
   				
   				data.setID(this.id);
   				data.setTargetID(0);
@@ -241,7 +247,7 @@ public class ChatServerThread extends ServerThread {
   				data.setEventType("Message");
   				data.setData("");
                  */
- /* 
+                /* 
   				 *	empty outBuffer   				 	
   				 **/
                 if (outBuffer.size() > 0) {
@@ -256,7 +262,11 @@ public class ChatServerThread extends ServerThread {
                     // for optimizing network and memory usage	
 
                 }
-
+                
+                //int chars = input.read();
+                
+                
+                
                 res = in.readObject();							// read data from client 
 
                 // can cause null exception
@@ -295,6 +305,7 @@ public class ChatServerThread extends ServerThread {
                     if (d.getData() != null && !clientdata.equals("")) {
 
                         String type = d.getEventType();
+                        
                         if (type.equals("PrivateMessage")) {
 
                             setDataPackage(d);
@@ -304,7 +315,7 @@ public class ChatServerThread extends ServerThread {
                         } else if (type.equals("ChangeRoom")) {
                             /* If changeroom requested */
 
- /* Notify others that we're changing room */
+                            /* Notify others that we're changing room */
                             server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Leave"), this.chatRoom, this.hostaddress);
 
                             d.setID(this.id);
@@ -328,15 +339,16 @@ public class ChatServerThread extends ServerThread {
                     d = null;	// clean up	
 
                 }
-
+                logger.log(res);
                 //Thread.sleep(250);	// put to sleep for about 250 milliseconds
             }
 
         } catch (IOException io) {
-            System.out.println("Error ChatServerThread: IO \n" + io.getMessage());
+            logger.log("Error ChatServerThread: IO \n" + io.getMessage());
         } //io.printStackTrace();
         catch (Exception e) {
-            System.out.println("Error ChatServerThread: General Exception " + e.getMessage());
+            logger.log("Error ChatServerThread: General Exception " + e.getMessage() );
+            e.getStackTrace();
         } // e.printStackTrace(); 
         finally {
             /* Do some cleaning */
@@ -354,9 +366,9 @@ public class ChatServerThread extends ServerThread {
                 out.close();
 
             } catch (IOException io) {
-                System.out.println("Error IO closing IOException: " + io.getMessage());
+                logger.log("Error IO closing IOException: " + io.getMessage());
             } catch (Exception e) {
-                System.out.println("Error IO closing Exception: " + e.getMessage());
+                logger.log("Error IO closing Exception: " + e.getMessage());
             } finally {
 
                 // clear buffer
@@ -366,13 +378,31 @@ public class ChatServerThread extends ServerThread {
                 out = null;
 
                 //System.gc();			// runs garbage collector ?
-                System.out.println("ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
+                logger.log("ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
             }
 
         }
+    }
+    
+    public void respondToServerThread(ServerThread serverthrean, String command, String handle) throws InterruptedException {
+        String response = "";
+        if (command.equals("//kick")) {
+            response = "KICK";
+        }
+        if (command.equals("//ban")) {
+            response = "BAN";
+            server.facade.banUser(handle);
+        }
+
+        /*for(int i=1;i<args.length;i++)
+                                        response[i] = args[i];	// set ....
+         */
+        tfud.communication.DataPackage temp = new tfud.communication.DataPackage(getID(), getID(), getHandle(), "ServerMessage", response);
+        setDataPackage(temp);
     }
 
     public String toString() {
         return this.id + "; [" + this.handle + "]";
     }
+
 }

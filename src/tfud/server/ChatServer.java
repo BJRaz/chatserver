@@ -19,8 +19,11 @@ public class ChatServer extends Server {
 
     private Date startup;
     private int id;
-    private ILogger logger;
+    final ILogger logger;
 
+    /**
+     *
+     */
     protected IStorageFacade facade;		// facade to persistent storage	
 
     /**
@@ -32,17 +35,20 @@ public class ChatServer extends Server {
     /**
      * Method ChatServer
      *
+     * @param logger
      * @throws IOException
      * @param port int sets the port number on which the server will listens for
      * connections - defaults to port 8900
      */
-    public ChatServer(int port) throws IOException {
+    public ChatServer(int port, ILogger logger, IStorageFacade facade) throws IOException {
         // TODO: Add your code here
         super(port);
-        logger = new SystemLogger();
+        this.logger = logger;
         serverContainer = new Vector(MINSERVERTHREADS);			// set initial size and incremental size
         // ID's - counts up pr new ServerThread
         id = 0;
+        startup = new Date();
+        this.facade = facade;
     }
 
     /**
@@ -127,6 +133,13 @@ public class ChatServer extends Server {
     protected synchronized void remove(ChatServerThread t) {
         serverContainer.remove(t);
     }
+    
+    public tfud.communication.DataPackage buildPackage(ChatServerThread source, String response) throws InterruptedException {
+        tfud.communication.DataPackage temp = new tfud.communication.DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
+        source.setDataPackage(temp);
+        return temp;
+    }
+    
 
     /**
      * Method handleCommand
@@ -141,44 +154,31 @@ public class ChatServer extends Server {
     protected synchronized boolean handleCommand(String commandstring, ChatServerThread source) {
         try {
 
-            tfud.communication.DataPackage temp;
+            tfud.communication.DataPackage temp = null;
 
             logger.log(commandstring);
-            String[] args = commandstring.split(" ");                           // args[0] == Command
+            String[] args = commandstring.split(" ");                           // args[0] == Command, args[1] == User handle
             String command = args[0];
+            String handle = args[1];
 
             logger.log(source.myaccesslevel);
+
             if ((command.equals("//ban") || command.equals("//kick")) && source.getAccessLevel() <= 1) {	// only super or root
-                //Object[] response = new Object[args.length + 1];
+                
                 String response = "";
 
                 if (args.length > 1) {
 
-                    ChatServerThread t = findServerThreadByHandle(args[1]);
+                    ChatServerThread t = findServerThreadByHandle(handle);
                     if (t != null) {
-                        if (command.equals("//kick")) {
-                            response = "KICK";
-                        }
-                        if (command.equals("//ban")) {
-                            response = "BAN";
-                            facade.banUser(args[1]);
-                        }
-
-                        /*for(int i=1;i<args.length;i++)
-							response[i] = args[i];	// set ....
-                         */
-                        temp = new tfud.communication.DataPackage(t.getID(), t.getID(), t.getHandle(), "ServerMessage", response);
-                        t.setDataPackage(temp);
-
+                       t.respondToServerThread(source, command, handle);
                     } else {
-                        response = " " + command + ": user \"" + args[1] + "\" not found\n";
-                        temp = new tfud.communication.DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
-                        source.setDataPackage(temp);
+                        response = " " + command + ": user \"" + handle + "\" not found\n";
+                        temp = buildPackage(source, response);
                     }
                 } else {
                     response = " " + command + ": not enough arguments\n";
-                    temp = new tfud.communication.DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
-                    source.setDataPackage(temp);
+                    temp = buildPackage(source, response);
                 }
                 facade.log(temp, source.getHostAddress());
 
@@ -196,15 +196,14 @@ public class ChatServer extends Server {
                     response = "Restart not implemented";
                 }
 
-                temp = new tfud.communication.DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
-                source.setDataPackage(temp);
+                temp = buildPackage(source, response);
 
                 facade.log(temp, source.getHostAddress());
 
                 logger.log("Command: " + commandstring);
                 return true;
             } else if (command.equals("//whois") && source.getAccessLevel() <= 2) {	// only super or root or normal users
-                System.out.println("Command: " + commandstring);
+                logger.log("Command: " + commandstring);
                 return true;
             }
 
@@ -284,7 +283,7 @@ public class ChatServer extends Server {
             logger.log("OK\n\nWaiting for connections on port: " + this.port);
 
             while (true) {
-
+                
                 serverContainer.add(new ChatServerThread(this, s.accept()));
             }
 

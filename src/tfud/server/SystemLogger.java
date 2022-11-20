@@ -18,7 +18,10 @@ public class SystemLogger implements ILogger {
     }
 
     public void log(Object message) {
-        log(message.toString());
+        if(message == null)
+            log("");
+        else
+            log(message.toString());
     }
     
 }
