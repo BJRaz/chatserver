@@ -3,6 +3,7 @@ package tfud.server;
 import java.util.*;
 import java.io.*;
 import tfud.communication.DataPackage;
+import tfud.events.EventType;
 import tfud.parsers.FakeParser;
 import tfud.pstorage.IStorageFacade;
 import tfud.utils.ILogger;
@@ -138,9 +139,79 @@ public class ChatServer extends Server {
     }
 
     public DataPackage buildPackage(ChatServerThread source, String response) throws InterruptedException {
-        DataPackage temp = new DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
+        DataPackage temp = new DataPackage(source.getID(), source.getID(), source.getHandle(), EventType.SERVERMESSAGE, response);
         source.setDataPackage(temp);
         return temp;
+    }
+
+    protected synchronized boolean handleCommand(String commandstring, ChatServerThread source) {
+        try {
+
+            DataPackage temp = new DataPackage();
+            String response = "";
+
+            logger.log(commandstring);
+
+            String[] args = commandstring.split(" ");
+            String command = args[0];
+            String handle = args[1];
+
+            if (args.length <= 1) {
+                response = " " + command + ": not enough arguments\n";
+                temp = buildPackage(source, response);
+            } else {
+
+                ChatServerThread t = findServerThreadByHandle(handle);
+                if (t != null) {
+                    t.respondToServerThread(source, command, handle);
+                } else {
+                    response = " " + command + ": user \"" + handle + "\" not found\n";
+                    temp = buildPackage(source, response);
+                }
+            }
+
+            facade.log(temp, source.getHostAddress());
+
+            //source.getAccessLevel() <= 1
+            logger.log(source.myaccesslevel);
+
+            switch (command) {
+                case "//ban":
+                case "//kick":
+                    break;
+                case "//uptime":
+                    response = getUptime();
+                    break;
+                case "//status":
+                    response = getStatus();
+                    break;
+                case "//kill":
+                    response = "Kill not implemented";
+                    break;
+                case "//restart":
+                    response = "Restart not implemented";
+                    break;
+                case "//whois":
+                    logger.log("Command: " + commandstring);
+                    break;
+                default:
+                    break;
+            }
+
+            temp = buildPackage(source, response);
+
+            facade.log(temp, source.getHostAddress());
+
+            logger.log("Command: " + commandstring);
+            return true;
+
+        } catch (InterruptedException ie) {
+            logger.log("HandleCommand: " + ie.getMessage());
+        } finally {
+            //
+        }
+        return false;
+
     }
 
     /**
@@ -153,10 +224,10 @@ public class ChatServer extends Server {
      * command
      * @return boolean
      */
-    protected synchronized boolean handleCommand(String commandstring, ChatServerThread source) {
+    /*protected synchronized boolean handleCommand(String commandstring, ChatServerThread source) {
         try {
 
-            tfud.communication.DataPackage temp = null;
+            DataPackage temp = new DataPackage();
 
             logger.log(commandstring);
             String[] args = commandstring.split(" ");                         
@@ -221,8 +292,7 @@ public class ChatServer extends Server {
         }
         return false;
 
-    }
-
+    }*/
     /**
      * Search for clientthread by handle in container and returns it - if none
      * found returns null
@@ -247,24 +317,24 @@ public class ChatServer extends Server {
      */
     @Override
     public synchronized void relayMessage(Object message) {
-        
+
     }
 
     /**
-     *	@param 	pkg				tfud.communication.DataPackage 
-     *	@param 	myRoom			String - the room the client is in
-     *	@param hostaddress		String the clients IP-adress
+     * @param pkg	tfud.communication.DataPackage
+     * @param myRoom	String - the room the client is in
+     * @param hostaddress	String the clients IP-adress
      * @throws java.lang.InterruptedException
-     */ 
-    public synchronized void relayMessage(tfud.communication.DataPackage pkg, String myRoom, String hostaddress) throws InterruptedException {
-        String type = pkg.getEventType();
+     */
+    public synchronized void relayMessage(DataPackage pkg, String myRoom, String hostaddress) throws InterruptedException {
+        EventType type = pkg.getEventType();
         ChatServerThread t;
 
         for (Iterator e = serverContainer.iterator(); e.hasNext();) {
 
             t = (ChatServerThread) e.next();
 
-            if (type.equals("PrivateMessage")) {
+            if (type == EventType.PRIVATEMESSAGE) {
                 if (t.getID() == pkg.getTargetID() && t.getChatRoom().equals(myRoom)) {
                     t.setDataPackage(pkg);
                     break;

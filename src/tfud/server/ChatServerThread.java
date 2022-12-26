@@ -1,5 +1,6 @@
 package tfud.server;
 
+import tfud.events.EventType;
 import tfud.communication.*;
 import tfud.parsers.*;
 
@@ -35,8 +36,6 @@ public class ChatServerThread extends ServerThread {
     protected ChatServer server;    						// reference to server instance
     private final ILogger logger;
 
-    
-    
     /**
      * Constructor
      *
@@ -50,7 +49,7 @@ public class ChatServerThread extends ServerThread {
 
         this.server = (ChatServer) server;   			// REFERENCE TO MAIN SERVER 
         this.id = this.server.getNextID();			// set this threads ID
-        this.logger = this.server.logger; 
+        this.logger = this.server.logger;
         this.outBuffer = new Vector(MINBUFFERSIZE); 		// initial size    
 
         myaccesslevel = 2;					// default accesslevel
@@ -165,7 +164,7 @@ public class ChatServerThread extends ServerThread {
 
             Object res;
             DataPackage data;								// DataPackage reference
-            DataPackage d;									// DataPackage reference
+            DataPackage d;								// DataPackage reference
 
             String textData;
             String isCommand;
@@ -195,14 +194,14 @@ public class ChatServerThread extends ServerThread {
             returnValue = server.facade.checkLogin(username, password);
 
             if (returnValue == 0) {
-                out.writeObject(new DataPackage(this.id, 0, this.handle, "Login", "0"));
+                out.writeObject(new DataPackage(this.id, 0, this.handle, EventType.LOGIN, "0"));
                 throw new Exception("User (" + username + "/" + password + ") not found");
             } else if (returnValue == -1) {
-                out.writeObject(new DataPackage(this.id, 0, this.handle, "ServerMessage", "You have been banned"));
+                out.writeObject(new DataPackage(this.id, 0, this.handle, EventType.SERVERMESSAGE, "You have been banned"));
                 banned = true;
                 throw new Exception("User (" + username + "/" + password + ") is banned..");
             }
-           
+
             this.id = returnValue;
 
             /* NB NB NB */
@@ -214,10 +213,10 @@ public class ChatServerThread extends ServerThread {
             server.facade.updateOnlineStatus(this.handle, 1);
 
             /* Write We've logged in */
-            out.writeObject(new DataPackage(this.id, 0, this.handle, "Login", returnValue + ""));
+            out.writeObject(new DataPackage(this.id, 0, this.handle, EventType.LOGIN, returnValue + ""));
 
             /* Write Userlist */
-            out.writeObject(new DataPackage(this.id, 0, this.handle, "UserList", server.getOnlineUsers(this.chatRoom)));
+            out.writeObject(new DataPackage(this.id, 0, this.handle, EventType.USERLIST, server.getOnlineUsers(this.chatRoom)));
 
             server.relayMessage(data, this.chatRoom, this.hostaddress);		// relays message
 
@@ -225,41 +224,25 @@ public class ChatServerThread extends ServerThread {
             /* END INIT */
             /**
              * BEGIN WHILE LOOP Keeps connection alive untill some error or
-             * client disconnects 
-  			 *
+             * client disconnects
+             *
              */
             while (true) {
 
                 textData = "";
 
-                /* THIS IS DEPRECATED - TOO MUCH MEMORY WASTED FOR INSTANTIATING OBJECT */
-                /*data = new DataPackage();
-  				
-  				data.setID(this.id);
-  				data.setTargetID(0);
-  				data.setHandle(this.handle);
-  				data.setEventType("Message");
-  				data.setData("");
-                 */
-                /* 
-  				 *	empty outBuffer   				 	
-  				 **/
+                /**
+                *   WRITE outBuffer   				 	
+                */
                 if (outBuffer.size() > 0) {
 
-                    data = (DataPackage) outBuffer.remove(0);	// get first element from buffer
+                    data = (DataPackage) outBuffer.remove(0);                           // get first element from buffer
 
                     out.writeObject(data);
                 } else {
-                    // if buffer length == 0
                     out.writeObject(null);						// writes null value 
-                    // for optimizing network and memory usage	
-
                 }
-                
-                //int chars = input.read();
-                
-                
-                
+
                 res = in.readObject();							// read data from client 
 
                 // can cause null exception
@@ -267,7 +250,7 @@ public class ChatServerThread extends ServerThread {
                 // relays client message to all other threads
                 // must be reimplemented to handle chatroom etc.
                 if (res instanceof DataPackage) {
-                    
+
                     d = (DataPackage) res;
                     String clientdata = d.getData().toString();
                     if (clientdata.length() > 0) {
@@ -275,8 +258,8 @@ public class ChatServerThread extends ServerThread {
                     }
 
                     /**
-                     * Handle Server Commands 
-  					 *
+                     * Handle Server Commands
+                     *
                      */
                     if (textData.length() > 3) {
 
@@ -296,24 +279,24 @@ public class ChatServerThread extends ServerThread {
 
                     if (d.getData() != null && !clientdata.equals("")) {
 
-                        String type = d.getEventType();
-                        
+                        EventType type = d.getEventType();
+
                         switch (type) {
-                            case "PrivateMessage":
+                            case PRIVATEMESSAGE:
                                 setDataPackage(d);
                                 server.relayMessage(d, this.chatRoom, this.hostaddress);
                                 break;
-                            case "ChangeRoom":
+                            case CHANGEROOM:
                                 /* If changeroom requested */
-                                
+
                                 /* Notify others that we're changing room */
-                                server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Leave"), this.chatRoom, this.hostaddress);
+                                server.relayMessage(new DataPackage(this.id, 0, this.handle, EventType.CHANGEROOM, "Leave"), this.chatRoom, this.hostaddress);
                                 d.setID(this.id);
                                 this.chatRoom = clientdata;			// which chatroom requested ?
                                 /* send the userlist for the new chatroom to the client */
-                                setDataPackage(new DataPackage(this.id, 0, this.handle, "UserList", server.getOnlineUsers(this.chatRoom)));
+                                setDataPackage(new DataPackage(this.id, 0, this.handle, EventType.USERLIST, server.getOnlineUsers(this.chatRoom)));
                                 /* notify other clients that We have arrived  */
-                                server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Arrive"), this.chatRoom, this.hostaddress);
+                                server.relayMessage(new DataPackage(this.id, 0, this.handle, EventType.CHANGEROOM, "Arrive"), this.chatRoom, this.hostaddress);
                                 break;
                             default:
                                 /* This is a normal message - thus normal relaying */
@@ -323,19 +306,16 @@ public class ChatServerThread extends ServerThread {
 
                     }
 
-
                 }
                 logger.log(res);
             }
 
         } catch (IOException io) {
             logger.log("Error ChatServerThread: IO \n" + io.getMessage());
-        } 
-        catch (Exception e) {
-            logger.log("Error ChatServerThread: General Exception " + e.getMessage() );
+        } catch (Exception e) {
+            logger.log("Error ChatServerThread: General Exception " + e.getMessage());
             e.getStackTrace();
-        } 
-        finally {
+        } finally {
             /* Do some cleaning */
             try {
 
@@ -343,7 +323,7 @@ public class ChatServerThread extends ServerThread {
 
                 // relays offline message to all remaining threads
                 if (!banned) {
-                    server.relayMessage(new DataPackage(this.id, 0, this.handle, "Offline", "Offline"), this.chatRoom, this.hostaddress);
+                    server.relayMessage(new DataPackage(this.id, 0, this.handle, EventType.OFFLINE, "Offline"), this.chatRoom, this.hostaddress);
                     server.facade.updateOnlineStatus(this.handle, 0);
                 }
 
@@ -368,7 +348,7 @@ public class ChatServerThread extends ServerThread {
 
         }
     }
-    
+
     /**
      *
      * @param serverthrean
@@ -389,7 +369,7 @@ public class ChatServerThread extends ServerThread {
         /*for(int i=1;i<args.length;i++)
                                         response[i] = args[i];	// set ....
          */
-        tfud.communication.DataPackage temp = new tfud.communication.DataPackage(getID(), getID(), getHandle(), "ServerMessage", response);
+        tfud.communication.DataPackage temp = new tfud.communication.DataPackage(getID(), getID(), getHandle(), EventType.SERVERMESSAGE, response);
         setDataPackage(temp);
     }
 
