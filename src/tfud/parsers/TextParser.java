@@ -9,7 +9,7 @@ import java.util.Vector;
 /**
  * @author BJR
  */
-public class TextParser {
+public class TextParser implements IParser {
 
     private DocumentBuilderFactory factory;
     private DocumentBuilder builder;

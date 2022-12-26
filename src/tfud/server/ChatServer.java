@@ -2,6 +2,8 @@ package tfud.server;
 
 import java.util.*;
 import java.io.*;
+import tfud.communication.DataPackage;
+import tfud.parsers.FakeParser;
 import tfud.pstorage.IStorageFacade;
 import tfud.utils.ILogger;
 
@@ -36,6 +38,7 @@ public class ChatServer extends Server {
      * Method ChatServer
      *
      * @param logger
+     * @param facade
      * @throws IOException
      * @param port int sets the port number on which the server will listens for
      * connections - defaults to port 8900
@@ -133,13 +136,12 @@ public class ChatServer extends Server {
     protected synchronized void remove(ChatServerThread t) {
         serverContainer.remove(t);
     }
-    
-    public tfud.communication.DataPackage buildPackage(ChatServerThread source, String response) throws InterruptedException {
-        tfud.communication.DataPackage temp = new tfud.communication.DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
+
+    public DataPackage buildPackage(ChatServerThread source, String response) throws InterruptedException {
+        DataPackage temp = new DataPackage(source.getID(), source.getID(), source.getHandle(), "ServerMessage", response);
         source.setDataPackage(temp);
         return temp;
     }
-    
 
     /**
      * Method handleCommand
@@ -157,43 +159,48 @@ public class ChatServer extends Server {
             tfud.communication.DataPackage temp = null;
 
             logger.log(commandstring);
-            String[] args = commandstring.split(" ");                           // args[0] == Command, args[1] == User handle
+            String[] args = commandstring.split(" ");                         
             String command = args[0];
             String handle = args[1];
 
             logger.log(source.myaccesslevel);
-
+            
+            String response = "";
+            
             if ((command.equals("//ban") || command.equals("//kick")) && source.getAccessLevel() <= 1) {	// only super or root
-                
-                String response = "";
 
-                if (args.length > 1) {
-
+                if (args.length <= 1) {
+                    response = " " + command + ": not enough arguments\n";
+                    temp = buildPackage(source, response);
+                } else {
+                    
                     ChatServerThread t = findServerThreadByHandle(handle);
                     if (t != null) {
-                       t.respondToServerThread(source, command, handle);
+                        t.respondToServerThread(source, command, handle);
                     } else {
                         response = " " + command + ": user \"" + handle + "\" not found\n";
                         temp = buildPackage(source, response);
                     }
-                } else {
-                    response = " " + command + ": not enough arguments\n";
-                    temp = buildPackage(source, response);
                 }
                 facade.log(temp, source.getHostAddress());
 
                 return true;
             } else if (source.getAccessLevel() == 0) {                          // only root
-
-                String response = "";
-                if (command.equals("//uptime")) {
-                    response = getUptime();
-                } else if (command.equals("//status")) {
-                    response = getStatus();
-                } else if (command.equals("//kill")) {
-                    response = "Kill not implemented";
-                } else if (command.equals("//restart")) {
-                    response = "Restart not implemented";
+                switch (command) {
+                    case "//uptime":
+                        response = getUptime();
+                        break;
+                    case "//status":
+                        response = getStatus();
+                        break;
+                    case "//kill":
+                        response = "Kill not implemented";
+                        break;
+                    case "//restart":
+                        response = "Restart not implemented";
+                        break;
+                    default:
+                        break;
                 }
 
                 temp = buildPackage(source, response);
@@ -238,15 +245,16 @@ public class ChatServer extends Server {
     /**
      *
      */
+    @Override
     public synchronized void relayMessage(Object message) {
+        
     }
 
-    ;
-     
     /**
      *	@param 	pkg				tfud.communication.DataPackage 
      *	@param 	myRoom			String - the room the client is in
      *	@param hostaddress		String the clients IP-adress
+     * @throws java.lang.InterruptedException
      */ 
     public synchronized void relayMessage(tfud.communication.DataPackage pkg, String myRoom, String hostaddress) throws InterruptedException {
         String type = pkg.getEventType();
@@ -267,8 +275,6 @@ public class ChatServer extends Server {
 
         }
         facade.log(pkg, hostaddress);
-        return;
-
     }
 
     /**
@@ -276,6 +282,7 @@ public class ChatServer extends Server {
      * connection is made, adds an instance of ChatServerThread to
      * serverContainer
      */
+    @Override
     public void execute() {
         startup = new Date();
 
@@ -283,8 +290,7 @@ public class ChatServer extends Server {
             logger.log("OK\n\nWaiting for connections on port: " + this.port);
 
             while (true) {
-                
-                serverContainer.add(new ChatServerThread(this, s.accept()));
+                serverContainer.add(new ChatServerThread(this, s.accept(), new FakeParser()));
             }
 
         } catch (IOException ie) {
@@ -294,7 +300,5 @@ public class ChatServer extends Server {
         }
 
     }
-
-
 
 }

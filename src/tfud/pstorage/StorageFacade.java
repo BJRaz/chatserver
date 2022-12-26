@@ -57,8 +57,7 @@ class StorageFacade implements IStorageFacade {
      */
     @Override
     public synchronized int checkLogin(String username, String password) {
-        // TODO: Add your code here
-
+        
         int returnValue = 0;
         try {
             db.open();
@@ -67,22 +66,13 @@ class StorageFacade implements IStorageFacade {
             ResultSet result = db.getResultSet();
 
             if (result.next()) {
-                //System.out.println(result.getTimestamp("ban") + ", " +  (new java.util.Date()));
-                //DEBUG 
                 if (result.getTimestamp("ban") == null || result.getTimestamp("ban").getTime() <= (new java.util.Date().getTime())) {
                     returnValue = result.getInt("id");
                 } else {
                     returnValue = -1;	// banned
                 }
             }
-            result = null;
-
-            /*int i = 0;
-		 	
-		 	while(i++ < 6) {
-		 		Thread.sleep(1000);
-		 		System.out.println("HER: " + i);	
-		 	}*/
+            
             db.close();
         } catch (Exception e) {
 
@@ -156,7 +146,6 @@ class StorageFacade implements IStorageFacade {
                 returnValue = result.getInt("accesslevel");
             }
 
-            result = null;
             db.close();
         } catch (Exception e) {
             System.out.println("StorageFacade(checkLogin): " + e.getMessage());

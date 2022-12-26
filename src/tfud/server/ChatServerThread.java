@@ -24,7 +24,7 @@ public class ChatServerThread extends ServerThread {
     private String handle;									// users handle    
     private String chatRoom;								// chatroom name
     private String username, password;
-    private final TextParser tparser;
+    private final IParser tparser;
     private int id;											// users ID 
 
     private ObjectInputStream in;
@@ -44,7 +44,7 @@ public class ChatServerThread extends ServerThread {
      * @param	socket	socket to which this thread binds to
      * @throws java.net.SocketException
      */
-    public ChatServerThread(Server server, Socket socket) throws SocketException, IOException {
+    public ChatServerThread(Server server, Socket socket, IParser parser) throws SocketException, IOException {
 
         super(socket);
 
@@ -58,7 +58,7 @@ public class ChatServerThread extends ServerThread {
         this.chatRoom = "Start";				// Start chatroom = default chatroom
         this.handle = "";
 
-        tparser = new TextParser("replace.xml");   		// create Parser
+        tparser = parser; //= new TextParser("replace.xml");   		// create Parser
 
         in = new ObjectInputStream(input);			// sets streams
         out = new ObjectOutputStream(output);
@@ -154,6 +154,7 @@ public class ChatServerThread extends ServerThread {
      * If the connection is broken - the thread frees used variables and finally
      * removes itself from the collection of threads in the server.
      */
+    @Override
     public void handleConnection() {
 
         boolean banned = false;
@@ -162,7 +163,7 @@ public class ChatServerThread extends ServerThread {
 
             logger.log(" ** Connection from: " + hostaddress);
 
-            Object res = null;
+            Object res;
             DataPackage data;								// DataPackage reference
             DataPackage d;									// DataPackage reference
 
@@ -183,30 +184,25 @@ public class ChatServerThread extends ServerThread {
             /* Check for users credentials */
             int returnValue = 0;													// returnValue >0 == users id
 
-            try {
-                /* Read first data - is array of objects in this case Strings */
-                Object[] ret = (Object[]) data.getData();
-                String username = ret[0].toString();
-                String password = ret[1].toString();
-                /* Check DB for USER */
-                logger.log("User " + username + " is logging in.. ");
+            /* Read first data - is array of objects in this case Strings */
+            Object[] ret = (Object[]) data.getData();
+            String username = ret[0].toString();
+            String password = ret[1].toString();
+            /* Check DB for USER */
+            logger.log("User " + username + " is logging in.. ");
 
-                // violation of "dont talk to strangers"-pattern
-                returnValue = server.facade.checkLogin(username, password);
+            // violation of "dont talk to strangers"-pattern
+            returnValue = server.facade.checkLogin(username, password);
 
-                if (returnValue == 0) {
-                    out.writeObject(new DataPackage(this.id, 0, this.handle, "Login", "0"));
-                    throw new Exception("User (" + username + "/" + password + ") not found");
-                } else if (returnValue == -1) {
-                    out.writeObject(new DataPackage(this.id, 0, this.handle, "ServerMessage", "You have been banned"));
-                    banned = true;
-                    throw new Exception("User (" + username + "/" + password + ") is banned..");
-                }
-            }                       
-            catch (Exception e) {
-                throw e;
+            if (returnValue == 0) {
+                out.writeObject(new DataPackage(this.id, 0, this.handle, "Login", "0"));
+                throw new Exception("User (" + username + "/" + password + ") not found");
+            } else if (returnValue == -1) {
+                out.writeObject(new DataPackage(this.id, 0, this.handle, "ServerMessage", "You have been banned"));
+                banned = true;
+                throw new Exception("User (" + username + "/" + password + ") is banned..");
             }
-
+           
             this.id = returnValue;
 
             /* NB NB NB */
@@ -234,8 +230,6 @@ public class ChatServerThread extends ServerThread {
              */
             while (true) {
 
-                res = null;										// set res to null per loop
-
                 textData = "";
 
                 /* THIS IS DEPRECATED - TOO MUCH MEMORY WASTED FOR INSTANTIATING OBJECT */
@@ -255,7 +249,6 @@ public class ChatServerThread extends ServerThread {
                     data = (DataPackage) outBuffer.remove(0);	// get first element from buffer
 
                     out.writeObject(data);
-                    data = null;
                 } else {
                     // if buffer length == 0
                     out.writeObject(null);						// writes null value 
@@ -290,7 +283,6 @@ public class ChatServerThread extends ServerThread {
                         isCommand = textData.substring(0, 2);
 
                         if (isCommand.equals("//")) {
-                            isCommand = "";
                             if (server.handleCommand(textData, this)) {
                                 continue;	  					// if server command no need to parse text
                             }
@@ -306,50 +298,43 @@ public class ChatServerThread extends ServerThread {
 
                         String type = d.getEventType();
                         
-                        if (type.equals("PrivateMessage")) {
-
-                            setDataPackage(d);
-
-                            server.relayMessage(d, this.chatRoom, this.hostaddress);
-
-                        } else if (type.equals("ChangeRoom")) {
-                            /* If changeroom requested */
-
-                            /* Notify others that we're changing room */
-                            server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Leave"), this.chatRoom, this.hostaddress);
-
-                            d.setID(this.id);
-
-                            this.chatRoom = clientdata;			// which chatroom requested ?
-
-                            /* send the userlist for the new chatroom to the client */
-                            setDataPackage(new DataPackage(this.id, 0, this.handle, "UserList", server.getOnlineUsers(this.chatRoom)));
-
-                            /* notify other clients that We have arrived  */
-                            server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Arrive"), this.chatRoom, this.hostaddress);
-
-                        } else {
-                            /* This is a normal message - thus normal relaying */
-
-                            server.relayMessage(d, this.chatRoom, this.hostaddress);
+                        switch (type) {
+                            case "PrivateMessage":
+                                setDataPackage(d);
+                                server.relayMessage(d, this.chatRoom, this.hostaddress);
+                                break;
+                            case "ChangeRoom":
+                                /* If changeroom requested */
+                                
+                                /* Notify others that we're changing room */
+                                server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Leave"), this.chatRoom, this.hostaddress);
+                                d.setID(this.id);
+                                this.chatRoom = clientdata;			// which chatroom requested ?
+                                /* send the userlist for the new chatroom to the client */
+                                setDataPackage(new DataPackage(this.id, 0, this.handle, "UserList", server.getOnlineUsers(this.chatRoom)));
+                                /* notify other clients that We have arrived  */
+                                server.relayMessage(new DataPackage(this.id, 0, this.handle, "ChangeRoom", "Arrive"), this.chatRoom, this.hostaddress);
+                                break;
+                            default:
+                                /* This is a normal message - thus normal relaying */
+                                server.relayMessage(d, this.chatRoom, this.hostaddress);
+                                break;
                         }
 
                     }
 
-                    d = null;	// clean up	
 
                 }
                 logger.log(res);
-                //Thread.sleep(250);	// put to sleep for about 250 milliseconds
             }
 
         } catch (IOException io) {
             logger.log("Error ChatServerThread: IO \n" + io.getMessage());
-        } //io.printStackTrace();
+        } 
         catch (Exception e) {
             logger.log("Error ChatServerThread: General Exception " + e.getMessage() );
             e.getStackTrace();
-        } // e.printStackTrace(); 
+        } 
         finally {
             /* Do some cleaning */
             try {
@@ -378,12 +363,19 @@ public class ChatServerThread extends ServerThread {
                 out = null;
 
                 //System.gc();			// runs garbage collector ?
-                logger.log("ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
+                logger.log(" *** ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
             }
 
         }
     }
     
+    /**
+     *
+     * @param serverthrean
+     * @param command
+     * @param handle
+     * @throws InterruptedException
+     */
     public void respondToServerThread(ServerThread serverthrean, String command, String handle) throws InterruptedException {
         String response = "";
         if (command.equals("//kick")) {
@@ -401,6 +393,7 @@ public class ChatServerThread extends ServerThread {
         setDataPackage(temp);
     }
 
+    @Override
     public String toString() {
         return this.id + "; [" + this.handle + "]";
     }

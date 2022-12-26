@@ -47,8 +47,8 @@ public class MainApp {
     private static void parseInputParameters(String[] args) {
         // TODO: Add your code here
         if (args.length > 0) {
-            for (int i = 0; i < args.length; i++) {
-                String[] temp = args[i].split("\\=");
+            for (String arg : args) {
+                String[] temp = arg.split("\\=");
                 if (temp[0].equals("configfile")) {
                     ChatServer.path = temp[1];
                 }
@@ -58,7 +58,6 @@ public class MainApp {
             }
         } else {
             System.out.println("Usage: ChatServer <configfile=settingsfile> [port=<port no>] \n <..> means required - [..] optional.");
-            return;
         }
     }
    
