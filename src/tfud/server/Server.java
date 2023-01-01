@@ -27,7 +27,7 @@ abstract class Server {
     protected static int MINSERVERTHREADS = 50;
 
     protected static ServerSocket s;
-    protected Vector serverContainer;
+    protected List<ServerThread> serverContainer;
     protected int port;
 
     /**

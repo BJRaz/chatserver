@@ -48,7 +48,7 @@ public class ChatServer extends Server {
         // TODO: Add your code here
         super(port);
         this.logger = logger;
-        serverContainer = new Vector(MINSERVERTHREADS);			// set initial size and incremental size
+        serverContainer = new ArrayList<>(MINSERVERTHREADS);			// set initial size and incremental size
         // ID's - counts up pr new ServerThread
         id = 0;
         startup = new Date();
@@ -85,14 +85,15 @@ public class ChatServer extends Server {
      * @return String
      */
     protected synchronized String getOnlineUsers(String myRoom) {
-        Vector temp = new Vector();
-        ChatServerThread t;
-        for (Iterator e = serverContainer.iterator(); e.hasNext();) {
+        List<ServerThread> temp = new ArrayList<>();
+        
+        serverContainer.forEach(s -> {
+            ChatServerThread t = (ChatServerThread)s;
+            if(t.getChatRoom().equals(myRoom))
+                temp.add(s);
+        
+        });
 
-            if ((t = (ChatServerThread) e.next()).getChatRoom().equals(myRoom)) {
-                temp.add(t);
-            }
-        }
         return temp.toString();
     }
 
@@ -293,6 +294,7 @@ public class ChatServer extends Server {
         return false;
 
     }*/
+    
     /**
      * Search for clientthread by handle in container and returns it - if none
      * found returns null
