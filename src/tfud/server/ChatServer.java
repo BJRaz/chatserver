@@ -5,6 +5,7 @@ import java.io.*;
 import tfud.communication.DataPackage;
 import tfud.events.EventType;
 import tfud.parsers.FakeParser;
+import tfud.parsers.IParser;
 import tfud.pstorage.IStorageFacade;
 import tfud.utils.ILogger;
 
@@ -32,19 +33,19 @@ public class ChatServer extends Server {
     /**
      * Defaults to port 8900
      */
-    //protected static int port = 8900;
-    protected static String path = "";
+    private final IParser parser;
 
     /**
      * Method ChatServer
      *
      * @param logger
      * @param facade
+     * @param parser
      * @throws IOException
      * @param port int sets the port number on which the server will listens for
      * connections - defaults to port 8900
      */
-    public ChatServer(int port, ILogger logger, IStorageFacade facade) throws IOException {
+    public ChatServer(int port, ILogger logger, IStorageFacade facade, IParser parser) throws IOException {
         // TODO: Add your code here
         super(port);
         this.logger = logger;
@@ -53,6 +54,7 @@ public class ChatServer extends Server {
         id = 0;
         startup = new Date();
         this.facade = facade;
+        this.parser = parser;
     }
 
     /**
@@ -362,7 +364,7 @@ public class ChatServer extends Server {
             logger.log("OK\n\nWaiting for connections on port: " + this.port);
 
             while (true) {
-                serverContainer.add(new ChatServerThread(this, s.accept(), new FakeParser()));
+                serverContainer.add(new ChatServerThread(this, s.accept(), parser));
             }
 
         } catch (IOException ie) {

@@ -32,15 +32,17 @@ public class ChatServerThread extends ServerThread {
     private ObjectOutputStream out;
 
     protected int myaccesslevel;							// accesslevel can be 0=root, 1=super, 2=normal
-    protected Vector outBuffer; 							// outputdata buffer - Vector
+    protected List<DataPackage> outBuffer; 							// outputdata buffer - Vector
     protected ChatServer server;    						// reference to server instance
     private final ILogger logger;
+    private boolean banned;
 
     /**
      * Constructor
      *
      * @param	server	reference to server instance
      * @param	socket	socket to which this thread binds to
+     * @param parser
      * @throws java.net.SocketException
      */
     public ChatServerThread(Server server, Socket socket, IParser parser) throws SocketException, IOException {
@@ -50,14 +52,14 @@ public class ChatServerThread extends ServerThread {
         this.server = (ChatServer) server;   			// REFERENCE TO MAIN SERVER 
         this.id = this.server.getNextID();			// set this threads ID
         this.logger = this.server.logger;
-        this.outBuffer = new Vector(MINBUFFERSIZE); 		// initial size    
+        this.outBuffer = new ArrayList<>(MINBUFFERSIZE); 	// initial size    
 
         myaccesslevel = 2;					// default accesslevel
 
         this.chatRoom = "Start";				// Start chatroom = default chatroom
         this.handle = "";
 
-        tparser = parser; //= new TextParser("replace.xml");   		// create Parser
+        tparser = parser;                                       // assign Parser
 
         in = new ObjectInputStream(input);			// sets streams
         out = new ObjectOutputStream(output);
@@ -113,20 +115,6 @@ public class ChatServerThread extends ServerThread {
     }
 
     /**
-     * This adds message to buffer. Messages send from other threads, and is
-     * called from Server instance relayMessage method (which is synchronized -
-     * thus this should not be synchronized ?)
-     *
-     * @param	msg	string this is the message
-     * @throws java.lang.InterruptedException
-     */
-    protected synchronized void setMessage(String msg) throws InterruptedException {
-
-        outBuffer.addElement(msg);
-
-    }
-
-    /**
      * This method is used to set a DataPackage to the current Thread's
      * outputbuffer
      *
@@ -137,38 +125,22 @@ public class ChatServerThread extends ServerThread {
     protected synchronized void setDataPackage(tfud.communication.DataPackage pkg) throws InterruptedException {
 
         // Adds string to buffer
-        outBuffer.addElement(pkg);
+        outBuffer.add(pkg);
 
     }
 
-    /**
-     * Overridden from ServerThread Handles the connection to between this
-     * thread and the client
-     *
-     * The client sends username and password, which is checked
-     *
-     * Runs a infinite loop untill some exception occurs - i.e the client
-     * closing the connection
-     *
-     * If the connection is broken - the thread frees used variables and finally
-     * removes itself from the collection of threads in the server.
-     */
-    @Override
-    public void handleConnection() {
+    Object res;
+    DataPackage data;								// DataPackage reference
+    DataPackage d;								// DataPackage reference
 
-        boolean banned = false;
+    String textData;
+    String isCommand;
+
+    @Override
+    protected void initiateConnection() {
+        logger.log(" ** Connection from: " + hostaddress);
 
         try {
-
-            logger.log(" ** Connection from: " + hostaddress);
-
-            Object res;
-            DataPackage data;								// DataPackage reference
-            DataPackage d;								// DataPackage reference
-
-            String textData;
-            String isCommand;
-
             /**
              *
              * NOTICE !!! Reads Client first datapacket
@@ -220,8 +192,31 @@ public class ChatServerThread extends ServerThread {
 
             server.relayMessage(data, this.chatRoom, this.hostaddress);		// relays message
 
-            //server.facade.log(data, this.hostaddress);  		
+            server.facade.log(data, this.hostaddress);  		
             /* END INIT */
+        } catch (Exception e) {
+            // TODO: handle error 
+        }
+
+    }
+
+    /**
+     * Overridden from ServerThread Handles the connection to between this
+     * thread and the client
+     *
+     * The client sends username and password, which is checked
+     *
+     * Runs a infinite loop untill some exception occurs - i.e the client
+     * closing the connection
+     *
+     * If the connection is broken - the thread frees used variables and finally
+     * removes itself from the collection of threads in the server.
+     */
+    @Override
+    public void handleConnection() {
+
+        try {
+
             /**
              * BEGIN WHILE LOOP Keeps connection alive untill some error or
              * client disconnects
@@ -232,11 +227,11 @@ public class ChatServerThread extends ServerThread {
                 textData = "";
 
                 /**
-                *   WRITE outBuffer   				 	
-                */
+                 * WRITE outBuffer
+                 */
                 if (outBuffer.size() > 0) {
 
-                    data = (DataPackage) outBuffer.remove(0);                           // get first element from buffer
+                    data = outBuffer.remove(0);                           // get first element from buffer
 
                     out.writeObject(data);
                 } else {
@@ -289,7 +284,7 @@ public class ChatServerThread extends ServerThread {
                             case CHANGEROOM:
                                 /* If changeroom requested */
 
-                                /* Notify others that we're changing room */
+ /* Notify others that we're changing room */
                                 server.relayMessage(new DataPackage(this.id, 0, this.handle, EventType.CHANGEROOM, "Leave"), this.chatRoom, this.hostaddress);
                                 d.setID(this.id);
                                 this.chatRoom = clientdata;			// which chatroom requested ?
@@ -316,36 +311,41 @@ public class ChatServerThread extends ServerThread {
             logger.log("Error ChatServerThread: General Exception " + e.getMessage());
             e.getStackTrace();
         } finally {
-            /* Do some cleaning */
-            try {
+           
 
-                server.remove(this);							// remove this thread from container
+        }
+    }
 
-                // relays offline message to all remaining threads
-                if (!banned) {
-                    server.relayMessage(new DataPackage(this.id, 0, this.handle, EventType.OFFLINE, "Offline"), this.chatRoom, this.hostaddress);
-                    server.facade.updateOnlineStatus(this.handle, 0);
-                }
+    @Override
+    protected void closeConnection() {
+        /* Do some cleaning */
+        try {
 
-                in.close();														// Close streams           	
-                out.close();
+            server.remove(this);							// remove this thread from container
 
-            } catch (IOException io) {
-                logger.log("Error IO closing IOException: " + io.getMessage());
-            } catch (Exception e) {
-                logger.log("Error IO closing Exception: " + e.getMessage());
-            } finally {
-
-                // clear buffer
-                outBuffer.clear();
-                outBuffer = null;
-                in = null;
-                out = null;
-
-                //System.gc();			// runs garbage collector ?
-                logger.log(" *** ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
+            // relays offline message to all remaining threads
+            if (!banned) {
+                server.relayMessage(new DataPackage(this.id, 0, this.handle, EventType.OFFLINE, "Offline"), this.chatRoom, this.hostaddress);
+                server.facade.updateOnlineStatus(this.handle, 0);
             }
 
+            in.close();														// Close streams           	
+            out.close();
+
+        } catch (IOException io) {
+            logger.log("Error IO closing IOException: " + io.getMessage());
+        } catch (Exception e) {
+            logger.log("Error IO closing Exception: " + e.getMessage());
+        } finally {
+
+            // clear buffer
+            outBuffer.clear();
+            outBuffer = null;
+            in = null;
+            out = null;
+
+            //System.gc();			// runs garbage collector ?
+            logger.log(" *** ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
         }
     }
 
@@ -356,7 +356,7 @@ public class ChatServerThread extends ServerThread {
      * @param handle
      * @throws InterruptedException
      */
-    public void respondToServerThread(ServerThread serverthrean, String command, String handle) throws InterruptedException {
+    protected void respondToServerThread(ServerThread serverthrean, String command, String handle) throws InterruptedException {
         String response = "";
         if (command.equals("//kick")) {
             response = "KICK";
@@ -366,10 +366,11 @@ public class ChatServerThread extends ServerThread {
             server.facade.banUser(handle);
         }
 
-        /*for(int i=1;i<args.length;i++)
-                                        response[i] = args[i];	// set ....
-         */
-        tfud.communication.DataPackage temp = new tfud.communication.DataPackage(getID(), getID(), getHandle(), EventType.SERVERMESSAGE, response);
+        DataPackage temp = new DataPackage(getID(),
+                getID(),
+                getHandle(),
+                EventType.SERVERMESSAGE,
+                response);
         setDataPackage(temp);
     }
 
