@@ -4,7 +4,6 @@ import java.util.*;
 import java.io.*;
 import tfud.communication.DataPackage;
 import tfud.events.EventType;
-import tfud.parsers.FakeParser;
 import tfud.parsers.IParser;
 import tfud.pstorage.IStorageFacade;
 import tfud.utils.ILogger;
@@ -23,12 +22,12 @@ public class ChatServer extends Server {
 
     private Date startup;
     private int id;
-    final ILogger logger;
+    private final ILogger logger;
 
     /**
      *
      */
-    protected IStorageFacade facade;		// facade to persistent storage	
+    private final IStorageFacade facade;		// facade to persistent storage	
 
     /**
      * Defaults to port 8900
@@ -331,6 +330,8 @@ public class ChatServer extends Server {
      * @throws java.lang.InterruptedException
      */
     public synchronized void relayMessage(DataPackage pkg, String myRoom, String hostaddress) throws InterruptedException {
+        if(pkg == null)
+            throw new NullPointerException();
         EventType type = pkg.getEventType();
         ChatServerThread t;
 
@@ -364,7 +365,8 @@ public class ChatServer extends Server {
             logger.log("OK\n\nWaiting for connections on port: " + this.port);
 
             while (true) {
-                serverContainer.add(new ChatServerThread(this, s.accept(), parser));
+                ChatServerThread server = new ChatServerThread(this, s.accept(), parser);
+                serverContainer.add(server);
             }
 
         } catch (IOException ie) {
@@ -373,6 +375,14 @@ public class ChatServer extends Server {
             logger.log("Exception in Server .. " + e.getMessage());
         }
 
+    }
+
+    ILogger getLogger() {
+        return logger;
+    }
+
+    IStorageFacade getFacade() {
+        return facade;
     }
 
 }
