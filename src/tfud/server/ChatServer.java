@@ -87,12 +87,13 @@ public class ChatServer extends Server {
      */
     protected synchronized String getOnlineUsers(String myRoom) {
         List<ServerThread> temp = new ArrayList<>();
-        
+
         serverContainer.forEach(s -> {
-            ChatServerThread t = (ChatServerThread)s;
-            if(t.getChatRoom().equals(myRoom))
+            ChatServerThread t = (ChatServerThread) s;
+            if (t.getChatRoom().equals(myRoom)) {
                 temp.add(s);
-        
+            }
+
         });
 
         return temp.toString();
@@ -295,7 +296,6 @@ public class ChatServer extends Server {
         return false;
 
     }*/
-    
     /**
      * Search for clientthread by handle in container and returns it - if none
      * found returns null
@@ -330,25 +330,32 @@ public class ChatServer extends Server {
      * @throws java.lang.InterruptedException
      */
     public synchronized void relayMessage(DataPackage pkg, String myRoom, String hostaddress) throws InterruptedException {
-        if(pkg == null)
+        if (pkg == null) {
             throw new NullPointerException();
+        }
         EventType type = pkg.getEventType();
-        ChatServerThread t;
+        // TODO:
+        switch (type) {
+            case PRIVATEMESSAGE:
+                break;
+            case CHANGEROOM:
+                break;
+            default:
+                break;
+        }
 
-        for (Iterator e = serverContainer.iterator(); e.hasNext();) {
-
-            t = (ChatServerThread) e.next();
+        serverContainer.forEach(serverthread -> {
+            ChatServerThread t = (ChatServerThread) serverthread;
 
             if (type == EventType.PRIVATEMESSAGE) {
                 if (t.getID() == pkg.getTargetID() && t.getChatRoom().equals(myRoom)) {
                     t.setDataPackage(pkg);
-                    break;
                 }
             } else if (t.getChatRoom().equals(myRoom)) {
                 t.setDataPackage(pkg);
             }
+        });
 
-        }
         facade.log(pkg, hostaddress);
     }
 
