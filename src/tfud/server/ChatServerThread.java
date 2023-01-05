@@ -123,23 +123,38 @@ public class ChatServerThread extends ServerThread {
      * @throws java.lang.InterruptedException
      *
      */
-    protected synchronized void setDataPackage(DataPackage data) throws InterruptedException {
+    protected synchronized void setDataPackage(DataPackage data) {
+        writeToLog("Sending package: " + data);
         outBuffer.add(data);
     }
+    
+    protected synchronized int getOutBufferSize() {
+        return outBuffer.size();
+    }
 
+    protected synchronized DataPackage getNextMessage() {
+        return outBuffer.remove(0);
+    }
+    
+    private void writeToLog(String msg) {
+        logger.log(id + " " + msg);
+    }
+    
     Object res;
     DataPackage data;								// DataPackage reference
 
     @Override
     protected void initiateConnection() {
-        logger.log(" ** Connection from: " + hostaddress);
+        writeToLog(" ** Connection from: " + hostaddress);
 
         try {
             /**
              *
-             * PROTOCOL: 1) Reads Clients first datapackage as a ONLINE event 2)
-             * Check users credentials an send an event to client if fails 3) if
-             * ok send LOGIN event to client 4) send a USERLIST immediatly
+             * PROTOCOL: 
+             * 1)   Reads Clients first datapackage as a ONLINE event 
+             * 2)   Check users credentials an send an event to client if fails 
+             * 3)   if ok send LOGIN event to client 
+             * 4)   send a USERLIST immediatly
              */
 
             data = (DataPackage) input.readObject();                            // 1) read clients ONLINE event    
@@ -154,7 +169,7 @@ public class ChatServerThread extends ServerThread {
             username = ret[0].toString();
             password = ret[1].toString();
 
-            logger.log("User " + username + " is logging in.. ");
+            writeToLog("User '" + username + "' is logging in.. ");
 
             /**
              * Check DB for USER TODO: refactor to not talk directly to facade
@@ -179,7 +194,7 @@ public class ChatServerThread extends ServerThread {
              */
             data.setID(id);
 
-            myaccesslevel = server.getFacade().getAccessLevel(this.handle);		// get accesslevel
+            myaccesslevel = server.getFacade().getAccessLevel(handle);		
 
             /**
              * Update storage with the users online status
@@ -187,22 +202,25 @@ public class ChatServerThread extends ServerThread {
             server.getFacade().updateOnlineStatus(handle, 1);
 
             /**
-             * send We've logged in to client
+             * 3) send logged in to client
              */
-            output.writeObject(new DataPackage(id, 0, handle, EventType.LOGIN, id));
+            setDataPackage(new DataPackage(id, 0, handle, EventType.LOGIN, id));        
 
             /**
-             * send Userlist to client
+             * 4) send Userlist to client
              */
-            output.writeObject(new DataPackage(id, 0, handle, EventType.USERLIST, server.getOnlineUsers(chatRoom)));
+            setDataPackage(new DataPackage(id, 0, handle, EventType.USERLIST, server.getOnlineUsers(chatRoom)));
 
-            server.relayMessage(data, chatRoom, hostaddress);                   // relays message to other serverthreads
+            /**
+             * Relay message to other threads
+             */
+            server.relayMessage(data, chatRoom, hostaddress);                   
 
-            server.getFacade().log(data, hostaddress);                               // 
+            
             /* END INIT */
         } catch (Exception e) {
             // TODO: handle error 
-            server.getFacade().log(data, "INIT:  " + e.getMessage());                // 
+            server.getFacade().log(data, "INIT:  " + e.getMessage());           // 
         }
 
     }
@@ -230,22 +248,18 @@ public class ChatServerThread extends ServerThread {
              *
              */
             while (true) {
-
-                
-
                 sendToClient();
 
                 if (readFromClient()) {
                     continue;
                 }
-
-//                logger.log(res);
             }
 
         } catch (IOException io) {
-            logger.log("Error ChatServerThread: IO \n" + io.getMessage());
+            writeToLog("Error ChatServerThread: IO \n" + io.getMessage());
+            io.getStackTrace();
         } catch (ClassNotFoundException | InterruptedException e) {
-            logger.log("Error ChatServerThread: General Exception " + e.getMessage());
+            writeToLog("Error ChatServerThread: General Exception " + e.getMessage());
             e.getStackTrace();
         } finally {
             // TODO:
@@ -253,6 +267,7 @@ public class ChatServerThread extends ServerThread {
     }
 
     private boolean readFromClient() throws InterruptedException, IOException, ClassNotFoundException {
+        writeToLog("(Read) waiting for client ... ");
         String textData = "";
         String command;
         data = (DataPackage) input.readObject();			// read data from client 
@@ -261,9 +276,11 @@ public class ChatServerThread extends ServerThread {
          * message to all other threads must be reimplemented to handle chatroom
          * etc.
          */
-        server.getLogger().log(data);
+        writeToLog(data.toString());
         
         textData = data.getData().toString();
+        
+        writeToLog("(Read) data received ... ");
         
         /**
          * Handle Server Commands
@@ -277,6 +294,7 @@ public class ChatServerThread extends ServerThread {
                 }
             }
         }
+        writeToLog("(Read) command handled ... ");
         /**
          * PARSE THE TEXT FOR SMILEYS, EMOTICONS AND STUFF
          *
@@ -289,6 +307,8 @@ public class ChatServerThread extends ServerThread {
 
             EventType type = data.getEventType();
 
+            writeToLog("(Read) relaying event: " + type.toString());
+            
             switch (type) {
                 case PRIVATEMESSAGE:
                     setDataPackage(data);
@@ -347,6 +367,7 @@ public class ChatServerThread extends ServerThread {
             }
 
         }
+        writeToLog("(Read) done ... ");
         return false;
     }
 
@@ -354,8 +375,9 @@ public class ChatServerThread extends ServerThread {
         /**
          * WRITE outBuffer
          */
-        if (outBuffer.size() > 0) {
-            output.writeObject(outBuffer.remove(0));                            // get first element from buffer
+        if (getOutBufferSize() > 0) {
+            while(getOutBufferSize() > 0)
+                output.writeObject(getNextMessage());                            // get first element from buffer
         } else {
             output.writeObject(new DataPackage());                              // writes null value
         }
@@ -393,9 +415,9 @@ public class ChatServerThread extends ServerThread {
             output.close();
 
         } catch (IOException io) {
-            logger.log("Error IO closing IOException: " + io.getMessage());
+            writeToLog("Error IO closing IOException: " + io.getMessage());
         } catch (InterruptedException e) {
-            logger.log("Error IO closing Exception: " + e.getMessage());
+            writeToLog("Error IO closing Exception: " + e.getMessage());
         } finally {
             // clear buffer
             outBuffer.clear();

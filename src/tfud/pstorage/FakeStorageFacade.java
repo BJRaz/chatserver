@@ -11,24 +11,34 @@ package tfud.pstorage;
  */
 public class FakeStorageFacade implements IStorageFacade {
 
+    @Override
     public void banUser(String username) {
-        System.out.println("banUser callled: " + username);
+        System.out.println("banUser called: " + username);
     }
 
+    @Override
     public int checkLogin(String username, String password) {
-        System.out.println("Checklogin callled: " + username + " " + password);
+        System.out.println("checklogin called: " + username + " " + password);
         return 1;
     }
 
+    @Override
     public int getAccessLevel(String username) {
-        System.out.println("getAccessLevel callled: " + username);
+        System.out.println("getAccessLevel called: " + username);
         return 0;
     }
 
+    @Override
     public void log(Object pack, String hostaddress) {
         System.out.println("log callled: " + " " + pack.toString() + " " + hostaddress);
     }
 
+    /**
+     *
+     * @param username
+     * @param status
+     */
+    @Override
     public void updateOnlineStatus(String username, int status) {
         System.out.println("updateOnlineStatus called: " + status);
     }
