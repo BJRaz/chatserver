@@ -1,7 +1,7 @@
 package tfud.server;
 
-import java.util.*;
 import java.io.*;
+import java.util.*;
 import tfud.communication.DataPackage;
 import tfud.events.EventType;
 import tfud.parsers.IParser;
@@ -88,10 +88,10 @@ public class ChatServer extends Server {
     protected synchronized String getOnlineUsers(String myRoom) {
         List<ServerThread> temp = new ArrayList<>();
 
-        serverContainer.forEach(s -> {
-            ChatServerThread t = (ChatServerThread) s;
+        serverContainer.forEach(st -> {
+            ChatServerThread t = (ChatServerThread) st;
             if (t.getChatRoom().equals(myRoom)) {
-                temp.add(s);
+                temp.add(st);
             }
 
         });
@@ -141,17 +141,21 @@ public class ChatServer extends Server {
         serverContainer.remove(t);
     }
 
-    public DataPackage buildPackage(ChatServerThread source, String response) throws InterruptedException {
-        DataPackage temp = new DataPackage(source.getID(), source.getID(), source.getHandle(), EventType.SERVERMESSAGE, response);
-        source.setDataPackage(temp);
-        return temp;
+    private DataPackage buildPackage(ChatServerThread source, String response) throws InterruptedException {
+        DataPackage pkg = new DataPackage(
+                source.getID(),
+                source.getID(),
+                source.getHandle(),
+                EventType.SERVERMESSAGE,
+                response);
+        source.setDataPackage(pkg);
+        return pkg;
     }
 
-    protected synchronized boolean handleCommand(String commandstring, ChatServerThread source) {
+    protected synchronized DataPackage handleCommand(String commandstring, ChatServerThread source) {
+        DataPackage pkg = new DataPackage();
+        String response = "";
         try {
-
-            DataPackage temp = new DataPackage();
-            String response = "";
 
             logger.log(commandstring);
 
@@ -161,7 +165,7 @@ public class ChatServer extends Server {
 
             if (args.length <= 1) {
                 response = " " + command + ": not enough arguments\n";
-                temp = buildPackage(source, response);
+                pkg = buildPackage(source, response);
             } else {
 
                 ChatServerThread t = findServerThreadByHandle(handle);
@@ -169,11 +173,11 @@ public class ChatServer extends Server {
                     t.respondToServerThread(source, command, handle);
                 } else {
                     response = " " + command + ": user \"" + handle + "\" not found\n";
-                    temp = buildPackage(source, response);
+                    pkg = buildPackage(source, response);
                 }
             }
 
-            facade.log(temp, source.getHostAddress());
+            facade.log(source.getHostAddress());
 
             //source.getAccessLevel() <= 1
             logger.log(source.myaccesslevel);
@@ -201,20 +205,160 @@ public class ChatServer extends Server {
                     break;
             }
 
-            temp = buildPackage(source, response);
+            pkg = buildPackage(source, response);
 
-            facade.log(temp, source.getHostAddress());
+            facade.log(source.getHostAddress());
 
             logger.log("Command: " + commandstring);
-            return true;
 
         } catch (InterruptedException ie) {
             logger.log("HandleCommand: " + ie.getMessage());
         } finally {
             //
         }
-        return false;
+        return pkg;
 
+    }
+
+    /**
+     * Search for clientthread by handle in container and returns it - if none
+     * found returns null
+     *
+     * @param handle String
+     * @return ChatServerThread
+     */
+    ChatServerThread findServerThreadByHandle(String handle) {
+        ChatServerThread t;
+        for (Iterator e = serverContainer.iterator(); e.hasNext();) {
+
+            if ((t = (ChatServerThread) e.next()).getHandle().equals(handle)) {
+                return t;
+            }
+
+        }
+        return null;
+    }
+
+    /**
+     * Server primary executing method - waits for connections and when
+     * connection is made, adds an instance of ChatServerThread to
+     * serverContainer
+     */
+    @Override
+    public void execute() {
+        startup = new Date();
+
+        try {
+            logger.log("OK\n\nWaiting for connections on port: " + this.port);
+
+            while (true) {
+                ChatServerThread server = new ChatServerThread(this, s.accept(), parser);
+                serverContainer.add(server);
+            }
+
+        } catch (IOException ie) {
+            logger.log("IOException in Server .. " + ie.getMessage());
+        } catch (Exception e) {
+            logger.log("Exception in Server .. " + e.getMessage());
+        }
+
+    }
+
+    ILogger getLogger() {
+        return logger;
+    }
+
+    IStorageFacade getFacade() {
+        return facade;
+    }
+
+    private void info(String msg) {
+
+    }
+
+    private void debug(String msg) {
+        logger.log(msg);
+    }
+
+    synchronized void relayMessage(ChatServerThread sender, DataPackage inputData) {
+        if (inputData == null) {
+            throw new NullPointerException();
+        }
+        EventType type = inputData.getEventType();
+
+//        List result = serverContainer.stream()
+//                .filter(o -> o.getId() == aThis.getID())
+//                .collect(Collectors.toList());
+        serverContainer.forEach(serverthread -> {
+            ChatServerThread target = (ChatServerThread) serverthread;
+            facade.log("Relaying to " + target.getID() + " " + type);
+
+            // TODO:
+            switch (type) {
+                case PRIVATEMESSAGE:
+                    if (target.getID() == inputData.getTargetID() && target.getChatRoom().equals(sender.getChatRoom())) {
+                        target.setDataPackage(inputData);
+                    }
+                    break;
+                case CHANGEROOM:
+//                        /**
+//                        * If changeroom requested Notify others that we're changing
+//                        * room
+//                        */
+//                       server.relayMessage(
+//                               this,
+//                               new DataPackage(
+//                                       id,
+//                                       0,
+//                                       handle,
+//                                       EventType.CHANGEROOM,
+//                                       "Leave"));
+//                       inputData.setID(this.id);
+//                       chatRoom = clientMessageDataText;                               // which chatroom requested ?
+//                       /**
+//                        * send the userlist for the new chatroom to the client
+//                        */
+//                       setDataPackage(
+//                               new DataPackage(
+//                                       id,
+//                                       0,
+//                                       handle,
+//                                       EventType.USERLIST,
+//                                       server.getOnlineUsers(chatRoom)
+//                               )
+//                       );
+//                       /* notify other clients that We have arrived  */
+//                       server.relayMessage(
+//                               this,
+//                               new DataPackage(
+//                                       id,
+//                                       0,
+//                                       handle,
+//                                       EventType.CHANGEROOM,
+//                                       "Arrive"
+//                               )
+//                       );
+                    break;
+                case CONNECTIONEVENT:
+                case LOGIN:
+                case OFFLINE:
+                case ONLINE:
+                case SERVERMESSAGE:
+                case USERLIST:
+                case AWAY:
+                case MESSAGE: {
+                    target.setDataPackage(inputData);
+                }
+                break;
+                default:    
+                    if (target.getChatRoom().equals(sender.getChatRoom())) {    // TODO: whats the difference
+                        target.setDataPackage(inputData);
+                    } else {
+                        target.setDataPackage(inputData);
+                    }
+                    break;
+            }
+        });
     }
 
     /**
@@ -296,100 +440,4 @@ public class ChatServer extends Server {
         return false;
 
     }*/
-    /**
-     * Search for clientthread by handle in container and returns it - if none
-     * found returns null
-     *
-     * @param handle String
-     * @return ChatServerThread
-     */
-    protected synchronized ChatServerThread findServerThreadByHandle(String handle) {
-        ChatServerThread t;
-        for (Iterator e = serverContainer.iterator(); e.hasNext();) {
-
-            if ((t = (ChatServerThread) e.next()).getHandle().equals(handle)) {
-                return t;
-            }
-
-        }
-        return null;
-    }
-
-    /**
-     *
-     */
-    @Override
-    public synchronized void relayMessage(Object message) {
-
-    }
-
-    /**
-     * @param pkg	tfud.communication.DataPackage
-     * @param myRoom	String - the room the client is in
-     * @param hostaddress	String the clients IP-adress
-     * @throws java.lang.InterruptedException
-     */
-    public synchronized void relayMessage(DataPackage pkg, String myRoom, String hostaddress) throws InterruptedException {
-        if (pkg == null) {
-            throw new NullPointerException();
-        }
-        EventType type = pkg.getEventType();
-        // TODO:
-        switch (type) {
-            case PRIVATEMESSAGE:
-                break;
-            case CHANGEROOM:
-                break;
-            default:
-                break;
-        }
-
-        serverContainer.forEach(serverthread -> {
-            ChatServerThread t = (ChatServerThread) serverthread;
-
-            if (type == EventType.PRIVATEMESSAGE) {
-                if (t.getID() == pkg.getTargetID() && t.getChatRoom().equals(myRoom)) {
-                    t.setDataPackage(pkg);
-                }
-            } else if (t.getChatRoom().equals(myRoom)) {
-                t.setDataPackage(pkg);
-            }
-        });
-
-        facade.log(pkg, hostaddress);
-    }
-
-    /**
-     * Server primary executing method - waits for connections and when
-     * connection is made, adds an instance of ChatServerThread to
-     * serverContainer
-     */
-    @Override
-    public void execute() {
-        startup = new Date();
-
-        try {
-            logger.log("OK\n\nWaiting for connections on port: " + this.port);
-
-            while (true) {
-                ChatServerThread server = new ChatServerThread(this, s.accept(), parser);
-                serverContainer.add(server);
-            }
-
-        } catch (IOException ie) {
-            logger.log("IOException in Server .. " + ie.getMessage());
-        } catch (Exception e) {
-            logger.log("Exception in Server .. " + e.getMessage());
-        }
-
-    }
-
-    ILogger getLogger() {
-        return logger;
-    }
-
-    IStorageFacade getFacade() {
-        return facade;
-    }
-
 }

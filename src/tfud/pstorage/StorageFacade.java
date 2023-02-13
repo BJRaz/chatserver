@@ -18,7 +18,7 @@ class StorageFacade implements IStorageFacade {
      *
      *
      */
-    public StorageFacade() {
+    StorageFacade() {
         // TODO: Add your code here
 
     }
@@ -33,7 +33,7 @@ class StorageFacade implements IStorageFacade {
      * @param	username	string name of database user
      * @param	password string password related to database user
      */
-    public StorageFacade(int typedb, String hostname, String dbname, String username, String password) {
+    StorageFacade(int typedb, String hostname, String dbname, String username, String password) {
 
         db = PersistentStorageFactory.createDBInstance(typedb);
         // connect = host, dbname, user, pass
@@ -90,7 +90,7 @@ class StorageFacade implements IStorageFacade {
      *
      */
     @Override
-    public synchronized void log(Object pack, String hostaddress) {
+    public synchronized void log(String message) {
 
         // TODO: Add your code here
         try {

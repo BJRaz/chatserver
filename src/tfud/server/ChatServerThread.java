@@ -1,12 +1,12 @@
 package tfud.server;
 
-import tfud.events.EventType;
-import tfud.communication.*;
-import tfud.parsers.*;
-
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import tfud.communication.*;
+import tfud.events.EventType;
+import tfud.parsers.*;
+import tfud.pstorage.IStorageFacade;
 import tfud.utils.ILogger;
 
 /**
@@ -33,9 +33,10 @@ public class ChatServerThread extends ServerThread {
     private ObjectOutputStream output;
 
     protected int myaccesslevel;						// accesslevel can be 0=root, 1=super, 2=normal
-    protected List<DataPackage> outBuffer; 					// outputdata buffer - Vector
+    protected List<DataPackage> outputBuffer; 					// outputdata buffer - Vector
     protected ChatServer server;    						// reference to server instance
     private boolean banned;
+    private final IStorageFacade facade;
 
     /**
      * Constructor
@@ -51,7 +52,8 @@ public class ChatServerThread extends ServerThread {
 
         id = server.getNextID();                                                // set this threads ID
         logger = server.getLogger();                                            // 
-        outBuffer = new ArrayList<>(MINBUFFERSIZE);                             // initial size    
+        facade = server.getFacade();
+        outputBuffer = new ArrayList<>(MINBUFFERSIZE);                          // initial size    
 
         myaccesslevel = 2;                                                      // default accesslevel
 
@@ -120,64 +122,62 @@ public class ChatServerThread extends ServerThread {
      * buffer
      *
      * @param data Datapackage
-     * @throws java.lang.InterruptedException
      *
      */
     protected synchronized void setDataPackage(DataPackage data) {
-        writeToLog("Sending package: " + data);
-        outBuffer.add(data);
+        debug("Sending package: " + data);
+        outputBuffer.add(data);
     }
-    
-    protected synchronized int getOutBufferSize() {
-        return outBuffer.size();
+
+    protected synchronized int getOutputBufferSize() {
+        return outputBuffer.size();
     }
 
     protected synchronized DataPackage getNextMessage() {
-        return outBuffer.remove(0);
+        return outputBuffer.remove(0);
     }
-    
-    private void writeToLog(String msg) {
+
+    private void debug(String msg) {
         logger.log(id + " " + msg);
     }
-    
-    Object res;
-    DataPackage data;								// DataPackage reference
+
+    private void info(String msg) {
+        logger.log(id + " " + msg);
+    }
 
     @Override
     protected void initiateConnection() {
-        writeToLog(" ** Connection from: " + hostaddress);
-
+        info(" ** Connection from: " + hostaddress);
+        DataPackage initialData = null;
         try {
             /**
              *
-             * PROTOCOL: 
-             * 1)   Reads Clients first datapackage as a ONLINE event 
-             * 2)   Check users credentials an send an event to client if fails 
-             * 3)   if ok send LOGIN event to client 
-             * 4)   send a USERLIST immediatly
+             * PROTOCOL: 1) Reads Clients first datapackage as a ONLINE event 2)
+             * Check users credentials an send an event to client if fails 3) if
+             * ok send LOGIN event to client 4) send a USERLIST immediatly
              */
 
-            data = (DataPackage) input.readObject();                            // 1) read clients ONLINE event    
+            initialData = (DataPackage) input.readObject();                            // 1) read clients ONLINE event    
 
-            this.handle = data.getHandle();
+            this.handle = initialData.getHandle();
 
             /**
              * Check for users credentials Read first data - is array of objects
              * in this case Strings
              */
-            Object[] ret = (Object[]) data.getData();
+            Object[] ret = (Object[]) initialData.getData();
             username = ret[0].toString();
             password = ret[1].toString();
 
-            writeToLog("User '" + username + "' is logging in.. ");
+            info("User '" + username + "' is logging in.. ");
 
             /**
              * Check DB for USER TODO: refactor to not talk directly to facade
              * etc.
              */
-            id = server.getFacade().checkLogin(username, password);
+            int access = facade.checkLogin(username, password);
 
-            switch (id) {
+            switch (access) {
                 case 0:
                     // if 0 failed to login
                     output.writeObject(new DataPackage(this.id, 0, this.handle, EventType.LOGIN, "0"));
@@ -192,35 +192,35 @@ public class ChatServerThread extends ServerThread {
             /**
              * NB NB NB
              */
-            data.setID(id);
+            DataPackage initialResponseData = new DataPackage();
+            initialResponseData.setID(access);
 
-            myaccesslevel = server.getFacade().getAccessLevel(handle);		
+            myaccesslevel = facade.getAccessLevel(handle);
 
             /**
              * Update storage with the users online status
              */
-            server.getFacade().updateOnlineStatus(handle, 1);
+            facade.updateOnlineStatus(handle, 1);
 
             /**
              * 3) send logged in to client
              */
-            setDataPackage(new DataPackage(id, 0, handle, EventType.LOGIN, id));        
+            setDataPackage(new DataPackage(access, 0, handle, EventType.LOGIN, access));
 
             /**
              * 4) send Userlist to client
              */
-            setDataPackage(new DataPackage(id, 0, handle, EventType.USERLIST, server.getOnlineUsers(chatRoom)));
+            setDataPackage(new DataPackage(access, 0, handle, EventType.USERLIST, getOnlineUsers(chatRoom)));
 
             /**
              * Relay message to other threads
              */
-            server.relayMessage(data, chatRoom, hostaddress);                   
+            relayMessage(this, initialResponseData);
 
-            
             /* END INIT */
         } catch (Exception e) {
             // TODO: handle error 
-            server.getFacade().log(data, "INIT:  " + e.getMessage());           // 
+            facade.log("INIT:  " + e.getMessage());           // 
         }
 
     }
@@ -249,138 +249,93 @@ public class ChatServerThread extends ServerThread {
              */
             while (true) {
                 sendToClient();
-
-                if (readFromClient()) {
-                    continue;
-                }
+                readFromClient();
             }
 
         } catch (IOException io) {
-            writeToLog("Error ChatServerThread: IO \n" + io.getMessage());
+            debug("Error ChatServerThread: IO \n" + io.getMessage());
             io.getStackTrace();
-        } catch (ClassNotFoundException | InterruptedException e) {
-            writeToLog("Error ChatServerThread: General Exception " + e.getMessage());
+        } catch (ClassNotFoundException e) {
+            debug("Error ChatServerThread: Class not found exception - " + e.getMessage());
             e.getStackTrace();
         } finally {
             // TODO:
         }
     }
 
-    private boolean readFromClient() throws InterruptedException, IOException, ClassNotFoundException {
-        writeToLog("(Read) waiting for client ... ");
-        String textData = "";
-        String command;
-        data = (DataPackage) input.readObject();			// read data from client 
-        /**
-         * Can cause null exception if connection is closed relays client
-         * message to all other threads must be reimplemented to handle chatroom
-         * etc.
-         */
-        writeToLog(data.toString());
-        
-        textData = data.getData().toString();
-        
-        writeToLog("(Read) data received ... ");
-        
-        /**
-         * Handle Server Commands
-         *
-         */
-        if (textData.length() > 3) {
-            command = textData.substring(0, 2);
-            if (command.equals("//")) {
-                if (server.handleCommand(textData, this)) {
-                    return true; // if server command no need to parse text
+
+    private boolean readFromClient() throws IOException, ClassNotFoundException {
+        debug("(Read) waiting for client ... ");
+        DataPackage inputData = (DataPackage) input.readObject();
+
+        EventType type = inputData.getEventType();
+
+        debug("(Read) relaying event: " + type.toString());
+
+        switch (type) {
+            case DUMMY: {
+                // Do nothing.. 
+                setDataPackage(new DataPackage());
+            }
+            break;
+            default: {
+                /**
+                 * Can cause null exception if connection is closed relays
+                 * client message to all other threads must be reimplemented to
+                 * handle chatroom etc.
+                 */
+                debug(inputData.toString());
+
+                Object clientMessageData = inputData.getData();                 // read data
+                if (clientMessageData == null) {
+                    return false;                                               // if data is null ignore and return
                 }
+                
+                debug("(Read) data received ... ");
+
+                String clientMessageDataText = clientMessageData.toString();
+                /**
+                 * Handle Server Commands
+                 *
+                 */
+                if (clientMessageDataText.length() > 3) {
+                    String command = clientMessageDataText.substring(0, 2);
+                    if (command.equals("//")) {
+                        DataPackage response = handleCommand(clientMessageDataText, this);
+                        setDataPackage(response);
+                        return false;                                           // if server command no need to parse text
+
+                    }
+                }
+                
+                debug("(Read) command handled ... ");
+
+                /**
+                 * PARSE THE TEXT FOR SMILEYS, EMOTICONS AND STUFF
+                 *
+                 */
+                clientMessageDataText = tparser.parseText(clientMessageDataText);
+
+                inputData.setData(clientMessageDataText);
+
+                relayMessage(this, inputData);
             }
         }
-        writeToLog("(Read) command handled ... ");
-        /**
-         * PARSE THE TEXT FOR SMILEYS, EMOTICONS AND STUFF
-         *
-         */
-        textData = tparser.parseText(textData);
-        
-        data.setData(textData);
-        
-        if (data.getData() != null && !textData.isEmpty()) {
 
-            EventType type = data.getEventType();
-
-            writeToLog("(Read) relaying event: " + type.toString());
-            
-            switch (type) {
-                case PRIVATEMESSAGE:
-                    setDataPackage(data);
-                    server.relayMessage(data, chatRoom, hostaddress);
-                    break;
-                case CHANGEROOM:
-                    /**
-                     * If changeroom requested
-                     */
-
-                    /**
-                     * Notify others that we're changing room
-                     */
-                    server.relayMessage(
-                            new DataPackage(
-                                    id,
-                                    0,
-                                    handle,
-                                    EventType.CHANGEROOM,
-                                    "Leave"),
-                            chatRoom,
-                            hostaddress);
-                    data.setID(this.id);
-                    chatRoom = textData;                          // which chatroom requested ?
-                    /**
-                     * send the userlist for the new chatroom to the client
-                     */
-                    setDataPackage(
-                            new DataPackage(
-                                    id,
-                                    0,
-                                    handle,
-                                    EventType.USERLIST,
-                                    server.getOnlineUsers(chatRoom)
-                            )
-                    );
-                    /* notify other clients that We have arrived  */
-                    server.relayMessage(
-                            new DataPackage(
-                                    id,
-                                    0,
-                                    handle,
-                                    EventType.CHANGEROOM,
-                                    "Arrive"
-                            ),
-                            chatRoom,
-                            hostaddress
-                    );
-                    break;
-                default:
-                    /**
-                     * This is a normal message - thus normal relaying
-                     */
-                    server.relayMessage(data, chatRoom, hostaddress);
-                    break;
-            }
-
-        }
-        writeToLog("(Read) done ... ");
-        return false;
+        return true;
     }
 
     private void sendToClient() throws IOException {
         /**
          * WRITE outBuffer
          */
-        if (getOutBufferSize() > 0) {
-            while(getOutBufferSize() > 0)
+        if (getOutputBufferSize() > 0) {
+            debug("Ouputbuffer size: " + getOutputBufferSize());
+            while (getOutputBufferSize() > 0) {
                 output.writeObject(getNextMessage());                            // get first element from buffer
-        } else {
-            output.writeObject(new DataPackage());                              // writes null value
+            }
         }
+
     }
 
     @Override
@@ -390,38 +345,35 @@ public class ChatServerThread extends ServerThread {
          */
         try {
 
-            server.remove(this);						// remove this thread from container
+            remove(this);						// remove this thread from container
 
             /**
              * relays offline message to all remaining threads
              *
              */
             if (!banned) {
-                server.relayMessage(
+                relayMessage(
+                        this,
                         new DataPackage(
                                 id,
                                 0,
                                 handle,
                                 EventType.OFFLINE,
                                 "Offline"
-                        ),
-                        chatRoom,
-                        hostaddress
+                        )
                 );
-                server.getFacade().updateOnlineStatus(handle, 0);
+                facade.updateOnlineStatus(handle, 0);
             }
 
             input.close();							// Close streams           	
             output.close();
 
         } catch (IOException io) {
-            writeToLog("Error IO closing IOException: " + io.getMessage());
-        } catch (InterruptedException e) {
-            writeToLog("Error IO closing Exception: " + e.getMessage());
+            debug("Error IO closing IOException: " + io.getMessage());
         } finally {
             // clear buffer
-            outBuffer.clear();
-            outBuffer = null;
+            outputBuffer.clear();
+            outputBuffer = null;
             input = null;
             output = null;
             logger.log(" *** ChatServerThread for client '" + handle + "' at address: '" + hostaddress + "' stopped..");
@@ -430,19 +382,19 @@ public class ChatServerThread extends ServerThread {
 
     /**
      *
-     * @param serverthrean
+     * @param serverThread
      * @param command
      * @param handle
      * @throws InterruptedException
      */
-    protected void respondToServerThread(ServerThread serverthrean, String command, String handle) throws InterruptedException {
+    protected void respondToServerThread(ServerThread serverThread, String command, String handle) throws InterruptedException {
         String response = "";
         if (command.equals("//kick")) {
             response = "KICK";
         }
         if (command.equals("//ban")) {
             response = "BAN";
-            server.getFacade().banUser(handle);
+            facade.banUser(handle);
         }
 
         DataPackage temp = new DataPackage(getID(),
@@ -456,6 +408,22 @@ public class ChatServerThread extends ServerThread {
     @Override
     public String toString() {
         return this.id + "; [" + this.handle + "]";
+    }
+
+    private void relayMessage(ChatServerThread aThis, DataPackage dataPackage) {
+        server.relayMessage(aThis, dataPackage);
+    }
+
+    private void remove(ChatServerThread aThis) {
+        server.remove(aThis);
+    }
+
+    private DataPackage handleCommand(String clientMessageDataText, ChatServerThread aThis) {
+        return server.handleCommand(clientMessageDataText, aThis);
+    }
+
+    private Object getOnlineUsers(String chatRoom) {
+        return server.getOnlineUsers(chatRoom);
     }
 
 }

@@ -29,8 +29,8 @@ public class FakeStorageFacade implements IStorageFacade {
     }
 
     @Override
-    public void log(Object pack, String hostaddress) {
-        System.out.println("log callled: " + " " + pack.toString() + " " + hostaddress);
+    public void log(String message) {
+        System.out.println("log callled: " + message);
     }
 
     /**

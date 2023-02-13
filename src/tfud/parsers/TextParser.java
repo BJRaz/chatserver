@@ -1,10 +1,10 @@
 package tfud.parsers;
 
-import org.w3c.dom.*;
-import javax.xml.parsers.*;
-import org.xml.sax.*;
-import java.util.regex.*;
 import java.util.Vector;
+import java.util.regex.*;
+import javax.xml.parsers.*;
+import org.w3c.dom.*;
+import org.xml.sax.*;
 
 /**
  * @author BJR
